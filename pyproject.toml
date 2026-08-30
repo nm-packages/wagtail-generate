@@ -7,7 +7,7 @@ name = "wagtail-generate"
 version = "0.1.0"
 description = "Generate opinionated Wagtail CMS projects from reusable codebase layouts."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 license = "MIT"
 authors = [
   { name = "Nick Moreton" },
@@ -36,12 +36,12 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py312"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 strict = true
 packages = ["wagtail_generate"]

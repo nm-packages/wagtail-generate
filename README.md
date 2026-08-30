@@ -84,11 +84,13 @@ A customized `AGENTS.md` is written at the project root. It records the readable
 site name, Python package, source directory, settings module, template choice, UV
 commands, and development guidance for the generated layout.
 
-Generated projects include a UV-native multi-stage `Dockerfile`, `compose.yaml`,
+Generated projects include a UV-native development `Dockerfile`, `compose.yaml`,
 `.env.example`, Ruff, djangofmt, pre-commit configuration, and a Makefile.
 PostgreSQL and MySQL projects also include database health checks and persistent
-storage. Install the locked dependencies, apply migrations, and run Wagtail
-locally with:
+storage. At generation time, UV's download catalog selects the newest stable
+CPython release line and pins its major/minor version in the project. Patch
+releases remain upgradable within that line. Install the locked dependencies,
+apply migrations, and run Wagtail locally with:
 
 ```shell
 make dev
@@ -100,6 +102,11 @@ complete environment in Docker instead, use:
 ```shell
 make docker
 ```
+
+The Dockerfile uses the selected major/minor image, such as `python:3.14-slim`,
+and `make docker` builds with `--pull`. This fetches current patch releases and
+the current slim Debian base without moving the generated project to a newer
+Python feature release.
 
 Copy `.env.example` to `.env` to customize the forwarded web port and, for a
 server database, its credentials and forwarded port. Compose applies migrations
@@ -145,11 +152,12 @@ Use `--site-directory .` to generate the Wagtail code directly in the project ro
 Without a site subfolder, the command runs the equivalent of:
 
 ```shell
-uv init --bare --no-workspace
-uv python pin 3.12
-uv add wagtail gunicorn
-uv add --dev ruff djangofmt pre-commit
-uv run wagtail start mysite .
+uvx uv@latest python list --only-downloads --output-format json
+uvx uv@latest init --bare --no-workspace --python <latest-stable-major.minor>
+uvx uv@latest python pin <latest-stable-major.minor>
+uvx uv@latest add wagtail
+uvx uv@latest add --dev ruff djangofmt pre-commit
+uvx uv@latest run wagtail start mysite .
 ```
 
 SQLite needs no additional database driver. The driver is `psycopg[binary]` for
