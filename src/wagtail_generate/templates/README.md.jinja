@@ -17,12 +17,13 @@ Wagtail CMS project generated with `wagtail-generate`.
 ## Quick start
 
 {% if database == "sqlite3" %}Install dependencies, apply migrations, and run Wagtail locally:
-{% else %}Start the database container, install dependencies, apply migrations, and run
-Wagtail locally:
+{% else %}Create the local environment file, start the database container, install
+dependencies, apply migrations, and run Wagtail locally:
 {% endif %}
 
 ```shell
-make dev
+{% if database != "sqlite3" %}cp .env.example .env
+{% endif %}make dev
 ```
 
 The site is available at <http://localhost:8000>. Stop the local server with

@@ -13,7 +13,10 @@ Install the project and its development tools:
 
 ```shell
 uv sync
+uv run pre-commit install
 ```
+
+Run every hook manually with `uv run pre-commit run --all-files`.
 
 Run the CLI:
 
@@ -178,6 +181,7 @@ Run the checks:
 uv run ruff check .
 uv run mypy
 uv run pytest
+uv run pre-commit run --all-files
 ```
 
 Install it as a local UV tool while developing:

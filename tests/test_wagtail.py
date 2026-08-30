@@ -88,6 +88,7 @@ def test_run_wagtail_start_streams_native_command(
     assert "Django settings: `site.settings`" in readme
     assert "Database: PostgreSQL" in readme
     assert "Python: 3.14" in readme
+    assert "cp .env.example .env\nmake dev" in readme
     assert "make dev" in readme
     assert "make docker" in readme
     assert "make check" in readme
@@ -104,14 +105,13 @@ def test_run_wagtail_start_streams_native_command(
     assert "postgres:17-bookworm" in (project_root / "compose.yaml").read_text()
     assert (project_root / "Makefile").is_file()
     assert "uv sync --locked" in (project_root / "Dockerfile").read_text()
-    assert "FROM python:3.14-slim AS development" in (
-        project_root / "Dockerfile"
-    ).read_text()
+    assert (
+        "FROM python:3.14-slim AS development"
+        in (project_root / "Dockerfile").read_text()
+    )
     assert (project_root / ".pre-commit-config.yaml").is_file()
     assert "[tool.djangofmt]" in (project_root / "pyproject.toml").read_text()
-    assert 'target-version = "py314"' in (
-        project_root / "pyproject.toml"
-    ).read_text()
+    assert 'target-version = "py314"' in (project_root / "pyproject.toml").read_text()
     assert (project_root / ".env.example").is_file()
     assert not package_directory.exists()
     assert (site_directory / "settings" / "base.py").is_file()

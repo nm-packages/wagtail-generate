@@ -20,6 +20,25 @@ def test_rendering_requires_every_template_value() -> None:
         render_template("env/postgresql.example.jinja", {})
 
 
+def test_sqlite_readme_quick_start_does_not_require_env_file() -> None:
+    content = render_template(
+        "README.md.jinja",
+        {
+            "site_name": "Example",
+            "project_name": "example",
+            "source_directory": ".",
+            "settings_module": "example.settings",
+            "database": "sqlite3",
+            "database_name": "SQLite",
+            "python_version": "3.14",
+        },
+    )
+
+    quick_start = content.split("## Quick start", 1)[1].split("## Docker setup", 1)[0]
+    assert "make dev" in quick_start
+    assert "cp .env.example .env" not in quick_start
+
+
 def test_write_template_renders_content_and_applies_mode(tmp_path: Path) -> None:
     destination = tmp_path / "Dockerfile"
 
