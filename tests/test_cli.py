@@ -10,6 +10,7 @@ from wagtail_generate.cli import (
     display_site_name,
     main,
     normalize_package_name,
+    prompt_for_database,
     prompt_for_site_name,
     prompt_for_site_subfolder,
 )
@@ -41,6 +42,8 @@ def test_start_runs_wagtail_command(run_start: Mock, tmp_path: Path) -> None:
                 "example",
                 "--site-name",
                 "Example Website",
+                "--database",
+                "postgresql",
                 "--directory",
                 str(output),
                 "--site-directory",
@@ -53,6 +56,7 @@ def test_start_runs_wagtail_command(run_start: Mock, tmp_path: Path) -> None:
     run_start.assert_called_once_with(
         project_name="example",
         site_name="Example Website",
+        database="postgresql",
         project_root=output,
         site_subfolder=None,
         template=None,
@@ -69,6 +73,8 @@ def test_start_returns_wagtail_exit_code(run_start: Mock, tmp_path: Path) -> Non
                 "example",
                 "--site-name",
                 "Example",
+                "--database",
+                "postgresql",
                 "--directory",
                 str(tmp_path),
                 "--site-directory",
@@ -133,6 +139,14 @@ def test_site_name_prompt_accepts_default() -> None:
     )
 
 
+def test_database_prompt_defaults_to_postgresql() -> None:
+    assert prompt_for_database(input_fn=lambda _: "") == "postgresql"
+
+
+def test_database_prompt_accepts_mysql() -> None:
+    assert prompt_for_database(input_fn=lambda _: "mysql") == "mysql"
+
+
 def test_subfolder_with_spaces_is_normalized(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -160,6 +174,8 @@ def test_start_uses_normalized_project_name(
                 "this is my site",
                 "--site-name",
                 "Editorial website",
+                "--database",
+                "mysql",
                 "--directory",
                 str(tmp_path),
                 "--site-directory",
@@ -173,6 +189,7 @@ def test_start_uses_normalized_project_name(
     run_start.assert_called_once_with(
         project_name="this_is_my_site",
         site_name="Editorial Website",
+        database="mysql",
         project_root=tmp_path,
         site_subfolder=None,
         template=None,
@@ -197,6 +214,8 @@ def test_start_refuses_destination_inside_tool_checkout(
             "example",
             "--site-name",
             "Example",
+            "--database",
+            "postgresql",
             "--directory",
             str(destination),
             "--site-directory",
@@ -226,6 +245,8 @@ def test_start_refuses_nonempty_project_root(
             "example",
             "--site-name",
             "Example",
+            "--database",
+            "postgresql",
             "--directory",
             str(tmp_path),
             "--site-directory",

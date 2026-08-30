@@ -3,8 +3,8 @@
 `wagtail-generate` is a UV-installable command-line tool for creating Wagtail CMS
 projects with a chosen, repeatable codebase layout.
 
-The repository currently contains the tool foundation. Layout definitions and the
-project generation workflow will be added as their requirements are established.
+Generated projects are ready for local UV or Docker development, with a selectable
+PostgreSQL or MySQL database and a consistent formatting and pre-commit setup.
 
 ## Development
 
@@ -43,6 +43,20 @@ It can also be supplied non-interactively with `--site-name`. This value populat
 `WAGTAIL_SITE_NAME` and the generated `AGENTS.md`; it does not affect folder or
 Python package names.
 
+The local Docker database is also selected independently. PostgreSQL is the
+default, with MySQL available as an alternative:
+
+```text
+Local Docker database [PostgreSQL/mysql]:
+```
+
+For non-interactive generation, use `--database postgresql` or
+`--database mysql`.
+
+PostgreSQL is recommended for full Django feature support. MySQL works for local
+development, but Django reports that MySQL cannot enforce Wagtail's conditional
+`WorkflowState` uniqueness constraint.
+
 The tool asks where to generate the site:
 
 ```text
@@ -68,6 +82,30 @@ A customized `AGENTS.md` is written at the project root. It records the readable
 site name, Python package, source directory, settings module, template choice, UV
 commands, and development guidance for the generated layout.
 
+Generated projects include a UV-native multi-stage `Dockerfile`, `compose.yaml`,
+database health checks and persistent storage, `.env.example`, Ruff, djangofmt,
+and pre-commit configuration. Start local development with:
+
+```shell
+docker compose up --build
+```
+
+Copy `.env.example` to `.env` to customize credentials or the forwarded web and
+database ports. Compose waits for the database health check, applies migrations,
+and then starts Wagtail on `http://localhost:8000` by default.
+
+Run the generated checks with:
+
+```shell
+uv run ruff check .
+uv run ruff format --check .
+uv run djangofmt .
+```
+
+The generated README includes the initial `git init`, `git add`, and pre-commit
+installation sequence. Pre-commit only considers files known to Git, including
+when `--all-files` is used.
+
 Wagtail normally nests its Django configuration package inside the destination
 (for example, `src/src/settings/`). When a site subfolder is selected, the tool
 flattens that package by one level (`src/settings/`) and updates the generated
@@ -84,6 +122,8 @@ Specify the Wagtail code location non-interactively with `--site-directory`:
 
 ```shell
 uv run wagtail-generate start mysite \
+  --site-name "My Site" \
+  --database postgresql \
   --directory path/to/project \
   --site-directory site
 ```
@@ -94,9 +134,14 @@ Without a site subfolder, the command runs the equivalent of:
 
 ```shell
 uv init --bare --no-workspace
-uv add wagtail
+uv python pin 3.12
+uv add wagtail gunicorn psycopg[binary]
+uv add --dev ruff djangofmt pre-commit
 uv run wagtail start mysite .
 ```
+
+The database driver is `psycopg[binary]` for PostgreSQL or `mysqlclient` for
+MySQL.
 
 When running the tool from this repository, generation into the repository root
 or any directory below it is refused. This prevents generated sites from being
@@ -119,17 +164,3 @@ Install it as a local UV tool while developing:
 ```shell
 uv tool install --editable .
 ```
-
-## Planned shape
-
-The generator will keep these concerns separate:
-
-- CLI argument parsing and user interaction
-- typed project configuration
-- named layout discovery and validation
-- filesystem planning and conflict detection
-- template rendering
-- optional post-generation commands
-
-Generated project files should be treated as a plan before they are written. This
-makes dry runs, useful conflict errors, and deterministic tests straightforward.

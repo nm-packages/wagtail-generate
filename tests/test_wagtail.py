@@ -17,25 +17,38 @@ def test_run_wagtail_start_streams_native_command(
     run.return_value = subprocess.CompletedProcess([], returncode=0)
     project_root = tmp_path / "generated"
     project_root.mkdir()
+    (project_root / "pyproject.toml").write_text(
+        '[project]\nname = "example"\nversion = "0.1.0"\n'
+    )
     site_directory = project_root / "site"
     site_directory.mkdir()
     moved_root_files = (".dockerignore", "Dockerfile", "manage.py")
     generated_root_files = (*moved_root_files, "requirements.txt")
     for filename in generated_root_files:
         content = (
-            'os.environ.setdefault("DJANGO_SETTINGS_MODULE", '
-            '"example.settings.dev")'
+            'os.environ.setdefault("DJANGO_SETTINGS_MODULE", "example.settings.dev")'
         )
         (site_directory / filename).write_text(
             content if filename == "manage.py" else filename
         )
+    (site_directory / "README.md").write_text("Wagtail's generated README")
     package_directory = site_directory / "example"
     (package_directory / "settings").mkdir(parents=True)
     (package_directory / "__init__.py").write_text("")
     (package_directory / "settings" / "base.py").write_text(
-        'INSTALLED_APPS = ["home", "search"]\n'
+        "from pathlib import Path\n\n"
+        "INSTALLED_APPS = [\n"
+        '    "home",\n'
+        '    "search",\n'
+        "]\n"
         'ROOT_URLCONF = "example.urls"\n'
-        'WAGTAIL_SITE_NAME = "example"'
+        'WAGTAIL_SITE_NAME = "example"\n'
+        "DATABASES = {\n"
+        '    "default": {\n'
+        '        "ENGINE": "django.db.backends.sqlite3",\n'
+        '        "NAME": "db.sqlite3",\n'
+        "    }\n"
+        "}\n"
     )
     (package_directory / "urls.py").write_text("")
     home_directory = site_directory / "home"
@@ -50,6 +63,7 @@ def test_run_wagtail_start_streams_native_command(
     result = run_wagtail_start(
         "example",
         site_name="Example website",
+        database="postgresql",
         project_root=project_root,
         site_subfolder=Path("site"),
         template=Path("custom-template"),
@@ -62,12 +76,28 @@ def test_run_wagtail_start_streams_native_command(
         assert not (site_directory / filename).exists()
     assert not (project_root / "requirements.txt").exists()
     assert not (site_directory / "requirements.txt").exists()
+    assert not (site_directory / "README.md").exists()
+    readme = (project_root / "README.md").read_text()
+    assert readme.startswith("# Example website")
+    assert "Site source: `site`" in readme
+    assert "Django settings: `site.settings`" in readme
+    assert "Local database: PostgreSQL" in readme
+    assert "docker compose up --build" in readme
+    assert "git init" in readme
+    assert "git add --all" in readme
+    assert "uv run pre-commit install" in readme
     agents = (project_root / "AGENTS.md").read_text()
     assert "Example website" in agents
     assert "Python project package: `example`" in agents
     assert "Site source directory: `site`" in agents
     assert "Django settings package: `site.settings`" in agents
+    assert "Local Docker database: `postgresql`" in agents
     assert "custom template `custom-template`" in agents
+    assert "postgres:17-bookworm" in (project_root / "compose.yaml").read_text()
+    assert "uv sync --locked" in (project_root / "Dockerfile").read_text()
+    assert (project_root / ".pre-commit-config.yaml").is_file()
+    assert "[tool.djangofmt]" in (project_root / "pyproject.toml").read_text()
+    assert (project_root / ".env.example").is_file()
     assert not package_directory.exists()
     assert (site_directory / "settings" / "base.py").is_file()
     assert "site.settings.dev" in (project_root / "manage.py").read_text()
@@ -76,6 +106,9 @@ def test_run_wagtail_start_streams_native_command(
     assert '"site.search"' in settings
     assert '"site.urls"' in settings
     assert 'WAGTAIL_SITE_NAME = "Example website"' in settings
+    assert '"ENGINE": "django.db.backends.postgresql"' in settings
+    assert '"django.contrib.postgres"' in settings
+    assert 'os.environ.get("DATABASE_HOST", "127.0.0.1")' in settings
     assert (home_directory / "apps.py").read_text() == '    name = "site.home"'
     assert (home_directory / "tests.py").read_text() == (
         "from site.home.models import HomePage"
@@ -83,10 +116,32 @@ def test_run_wagtail_start_streams_native_command(
     assert migration.read_text() == 'HomePage = apps.get_model("home.HomePage")'
     assert run.call_args_list == [
         (
-            (["uv", "init", "--bare", "--no-workspace"],),
+            (
+                [
+                    "uv",
+                    "init",
+                    "--bare",
+                    "--no-workspace",
+                    "--python",
+                    "3.12",
+                    "--name",
+                    "example",
+                ],
+            ),
             {"cwd": project_root, "check": False},
         ),
-        ((["uv", "add", "wagtail"],), {"cwd": project_root, "check": False}),
+        (
+            (["uv", "python", "pin", "3.12"],),
+            {"cwd": project_root, "check": False},
+        ),
+        (
+            (["uv", "add", "wagtail", "gunicorn", "psycopg[binary]"],),
+            {"cwd": project_root, "check": False},
+        ),
+        (
+            (["uv", "add", "--dev", "ruff", "djangofmt", "pre-commit"],),
+            {"cwd": project_root, "check": False},
+        ),
         (
             (
                 [
@@ -101,6 +156,18 @@ def test_run_wagtail_start_streams_native_command(
             ),
             {"cwd": project_root, "check": False},
         ),
+        (
+            (["uv", "run", "djangofmt", "site"],),
+            {"cwd": project_root, "check": False},
+        ),
+        (
+            (["uv", "run", "ruff", "check", "--fix", "site"],),
+            {"cwd": project_root, "check": False},
+        ),
+        (
+            (["uv", "run", "ruff", "format", "site", "manage.py"],),
+            {"cwd": project_root, "check": False},
+        ),
     ]
 
 
@@ -110,7 +177,16 @@ def test_run_wagtail_start_stops_after_failed_uv_command(run: Mock) -> None:
 
     assert run_wagtail_start("example", project_root=Path("generated")) == 2
     run.assert_called_once_with(
-        ["uv", "init", "--bare", "--no-workspace"],
+        [
+            "uv",
+            "init",
+            "--bare",
+            "--no-workspace",
+            "--python",
+            "3.12",
+            "--name",
+            "example",
+        ],
         cwd=Path("generated"),
         check=False,
     )

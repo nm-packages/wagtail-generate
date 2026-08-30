@@ -29,6 +29,8 @@ creates opinionated Wagtail CMS projects from named codebase layouts.
 - Keep output deterministic so generated projects can be tested reliably.
 - Separate template rendering from optional side effects such as running `uv`,
   Django, Git, or frontend commands.
+- Keep generated Docker, Compose, database settings, formatter configuration, and
+  `AGENTS.md` guidance consistent with the selected database and source layout.
 
 ## Quality checks
 

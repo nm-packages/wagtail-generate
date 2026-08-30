@@ -7,6 +7,7 @@ import sys
 import unicodedata
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Literal
 
 from wagtail_generate import __version__
 from wagtail_generate.safety import (
@@ -14,6 +15,8 @@ from wagtail_generate.safety import (
     source_checkout_root,
 )
 from wagtail_generate.wagtail import run_wagtail_start
+
+Database = Literal["postgresql", "mysql"]
 
 
 def normalize_package_name(value: str) -> str:
@@ -47,14 +50,26 @@ def prompt_for_site_name(
     return display_site_name(value or default_name)
 
 
+def prompt_for_database(
+    input_fn: Callable[[str], str] | None = None,
+) -> Database:
+    """Ask which database to configure for local Docker development."""
+    read_input = input_fn or input
+    while True:
+        value = read_input("Local Docker database [PostgreSQL/mysql]: ").strip()
+        match value.lower():
+            case "" | "postgres" | "postgresql" | "p":
+                return "postgresql"
+            case "mysql" | "m":
+                return "mysql"
+            case _:
+                print("Choose PostgreSQL or MySQL.")
+
+
 def normalize_subfolder(value: str) -> Path:
     """Normalize each component of a relative Python package path."""
     subfolder = Path(value)
-    if (
-        subfolder == Path(".")
-        or subfolder.is_absolute()
-        or ".." in subfolder.parts
-    ):
+    if subfolder == Path(".") or subfolder.is_absolute() or ".." in subfolder.parts:
         raise ValueError("the subfolder must stay inside the project root")
     return Path(*(normalize_package_name(part) for part in subfolder.parts))
 
@@ -112,6 +127,11 @@ def build_parser() -> argparse.ArgumentParser:
     start_parser.add_argument(
         "--site-name",
         help="Human-facing Wagtail site name; prompted for when omitted.",
+    )
+    start_parser.add_argument(
+        "--database",
+        choices=("postgresql", "mysql"),
+        help="Local Docker database; prompted for when omitted.",
     )
     start_parser.add_argument(
         "--directory",
@@ -194,6 +214,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print("error: --site-name cannot be empty", file=sys.stderr)
                 return 2
 
+        database: Database = arguments.database or prompt_for_database()
+
         if hasattr(arguments, "site_directory"):
             site_subfolder = arguments.site_directory
             if site_subfolder == Path("."):
@@ -216,6 +238,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_wagtail_start(
             project_name=project_name,
             site_name=site_name,
+            database=database,
             project_root=project_root,
             site_subfolder=site_subfolder,
             template=arguments.template,

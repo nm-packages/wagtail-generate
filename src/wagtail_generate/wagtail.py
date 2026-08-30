@@ -6,12 +6,20 @@ import subprocess
 import sys
 from pathlib import Path
 
+from wagtail_generate.developer_tools import (
+    TARGET_PYTHON_VERSION,
+    configure_database,
+    database_driver,
+    write_developer_tooling,
+)
+
 ROOT_FILES = (".dockerignore", "Dockerfile", "manage.py")
 
 
 def run_wagtail_start(
     project_name: str,
     site_name: str | None = None,
+    database: str = "postgresql",
     project_root: Path | None = None,
     site_subfolder: Path | None = None,
     template: Path | None = None,
@@ -34,8 +42,19 @@ def run_wagtail_start(
             return 2
 
     commands = [
-        ["uv", "init", "--bare", "--no-workspace"],
-        ["uv", "add", "wagtail"],
+        [
+            "uv",
+            "init",
+            "--bare",
+            "--no-workspace",
+            "--python",
+            TARGET_PYTHON_VERSION,
+            "--name",
+            project_name,
+        ],
+        ["uv", "python", "pin", TARGET_PYTHON_VERSION],
+        ["uv", "add", "wagtail", "gunicorn", database_driver(database)],
+        ["uv", "add", "--dev", "ruff", "djangofmt", "pre-commit"],
     ]
     for command in commands:
         result = subprocess.run(command, cwd=project_directory, check=False)
@@ -80,24 +99,70 @@ def run_wagtail_start(
             site_name or project_name.replace("_", " "),
         )
         (generated_directory / "requirements.txt").unlink(missing_ok=True)
+        (generated_directory / "README.md").unlink(missing_ok=True)
         for filename in ROOT_FILES:
             source = generated_directory / filename
             if source.exists():
                 source.replace(project_directory / filename)
+        settings_file = generated_directory / "settings" / "base.py"
+        source_directory = str(site_subfolder)
+        settings_module = f"{'.'.join(site_subfolder.parts)}.settings"
     else:
+        settings_file = project_directory / project_name / "settings" / "base.py"
         _set_wagtail_site_name(
-            project_directory / project_name / "settings" / "base.py",
-            site_name or project_name.replace("_", " "),
+            settings_file, site_name or project_name.replace("_", " ")
         )
         (project_directory / "requirements.txt").unlink(missing_ok=True)
+        source_directory = "."
+        settings_module = f"{project_name}.settings"
+
+    configure_database(settings_file, database, project_name)
+    write_developer_tooling(
+        project_directory=project_directory,
+        project_name=project_name,
+        settings_module=settings_module,
+        database=database,
+    )
 
     _write_agents_file(
         project_directory=project_directory,
         project_name=project_name,
         site_name=site_name or project_name.replace("_", " ").title(),
         site_subfolder=site_subfolder,
+        database=database,
         template=template,
     )
+    _write_readme_file(
+        project_directory=project_directory,
+        project_name=project_name,
+        site_name=site_name or project_name.replace("_", " ").title(),
+        site_subfolder=site_subfolder,
+        database=database,
+    )
+
+    format_result = subprocess.run(
+        ["uv", "run", "djangofmt", source_directory],
+        cwd=project_directory,
+        check=False,
+    )
+    if format_result.returncode != 0:
+        return format_result.returncode
+
+    lint_result = subprocess.run(
+        ["uv", "run", "ruff", "check", "--fix", source_directory],
+        cwd=project_directory,
+        check=False,
+    )
+    if lint_result.returncode != 0:
+        return lint_result.returncode
+
+    python_format_result = subprocess.run(
+        ["uv", "run", "ruff", "format", source_directory, "manage.py"],
+        cwd=project_directory,
+        check=False,
+    )
+    if python_format_result.returncode != 0:
+        return python_format_result.returncode
 
     return 0
 
@@ -120,6 +185,7 @@ def _write_agents_file(
     project_name: str,
     site_name: str,
     site_subfolder: Path | None,
+    database: str,
     template: Path | None,
 ) -> None:
     """Write project guidance customized for the generated Wagtail layout."""
@@ -150,6 +216,7 @@ This is the Wagtail CMS project for **{site_name}**. It was generated from
 - Python project package: `{project_name}`
 - Site source directory: `{source_directory}`
 - Django settings package: `{settings_module}`
+- Local Docker database: `{database}`
 - Dependency manager: UV
 
 ## Commands
@@ -158,10 +225,12 @@ Run commands from the project root:
 
 ```shell
 uv sync
-uv run python manage.py check
-uv run python manage.py migrate
-uv run python manage.py test
-uv run python manage.py runserver
+uv run ruff check .
+uv run ruff format --check .
+uv run djangofmt .
+docker compose up --build
+docker compose run --rm web python manage.py check
+docker compose run --rm web python manage.py test
 ```
 
 Use `uv add` and `uv remove` to manage dependencies. Do not create or maintain a
@@ -172,8 +241,118 @@ Use `uv add` and `uv remove` to manage dependencies. Do not create or maintain a
 - Keep settings in `{settings_module}` and preserve the existing environment split.
 - Create and commit Django migrations whenever models change.
 - Add tests for model, view, template, and page-behavior changes.
-- Run `uv run python manage.py check` and the relevant tests before finishing work.
+- Run the Django system check and relevant tests in Compose before finishing work.
+- After cloning, run `uv run pre-commit install`. Pre-commit only checks files known
+  to Git, so stage new files before expecting `--all-files` to include them.
+- Use `docker compose down` to stop local services and `docker compose down --volumes`
+  when the local {database} data should also be reset.
 - Keep secrets out of version control and load deployment values from the environment.
+"""
+    )
+
+
+def _write_readme_file(
+    project_directory: Path,
+    project_name: str,
+    site_name: str,
+    site_subfolder: Path | None,
+    database: str,
+) -> None:
+    """Write setup and development instructions for the generated project."""
+    source_directory = "." if site_subfolder is None else str(site_subfolder)
+    settings_module = (
+        f"{project_name}.settings"
+        if site_subfolder is None
+        else f"{'.'.join(site_subfolder.parts)}.settings"
+    )
+    database_name = "PostgreSQL" if database == "postgresql" else "MySQL"
+    mysql_note = ""
+    if database == "mysql":
+        mysql_note = """
+
+> [!NOTE]
+> Django warns that MySQL cannot enforce Wagtail's conditional `WorkflowState`
+> uniqueness constraint. This is a database limitation rather than a setup error.
+"""
+
+    (project_directory / "README.md").write_text(
+        f"""# {site_name}
+
+Wagtail CMS project generated with `wagtail-generate`.
+
+- Python package: `{project_name}`
+- Site source: `{source_directory}`
+- Django settings: `{settings_module}`
+- Local database: {database_name}
+- Python: {TARGET_PYTHON_VERSION}
+
+## Requirements
+
+- [UV](https://docs.astral.sh/uv/)
+- Docker with Compose support
+
+## Docker setup
+
+Copy the example environment file if you want to change credentials or forwarded
+ports, then start the complete development environment:
+
+```shell
+cp .env.example .env
+docker compose up --build
+```
+
+Compose waits for {database_name}, applies migrations, and serves Wagtail at
+<http://localhost:8000>. Create an administrator in another terminal:
+
+```shell
+docker compose exec web python manage.py createsuperuser
+```
+
+Stop the services with `docker compose down`. Add `--volumes` to also delete the
+local database data.
+{mysql_note}
+
+## Local UV setup
+
+Start only the database in Docker, install the locked dependencies, migrate, and
+run Django locally:
+
+```shell
+docker compose up -d db
+uv sync
+uv run python manage.py migrate
+uv run python manage.py runserver
+```
+
+The settings default to the database exposed on `127.0.0.1`. Override
+`DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_HOST`, and
+`DATABASE_PORT` when needed.
+
+## Quality checks
+
+```shell
+uv run ruff check .
+uv run ruff format --check .
+uv run djangofmt .
+uv run python manage.py test
+```
+
+Initialize version control and install the hooks after generation. Pre-commit's
+`--all-files` option means all files known to Git, so the initial `git add` is
+required:
+
+```shell
+git init
+git add --all
+uv run pre-commit install
+uv run pre-commit run --all-files
+```
+
+If a formatter changes files during that first run, inspect the changes and run
+`git add --all` again before committing.
+
+Use `uv add` and `uv remove` for dependencies. `pyproject.toml` and `uv.lock` are
+authoritative; this project intentionally does not use `requirements.txt`.
 """
     )
 
