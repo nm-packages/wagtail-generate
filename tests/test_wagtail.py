@@ -6,7 +6,11 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from wagtail_generate.wagtail import latest_stable_python_version, run_wagtail_start
+from wagtail_generate.wagtail import (
+    _flatten_project_package,
+    latest_stable_python_version,
+    run_wagtail_start,
+)
 
 
 @patch(
@@ -315,3 +319,38 @@ def test_subfolder_generation_refuses_root_file_conflict(
     assert "manage.py" in capsys.readouterr().err
     assert (tmp_path / "manage.py").read_text() == "existing"
     run.assert_not_called()
+
+
+def test_nested_subfolder_keeps_base_directory_at_project_root(
+    tmp_path: Path,
+) -> None:
+    generated_directory = tmp_path / "sites" / "example"
+    package_directory = generated_directory / "example"
+    settings_directory = package_directory / "settings"
+    settings_directory.mkdir(parents=True)
+    (settings_directory / "base.py").write_text(
+        "from pathlib import Path\n\n"
+        "PROJECT_DIR = Path(__file__).resolve().parent.parent\n"
+        "BASE_DIR = PROJECT_DIR.parent\n\n"
+        'INSTALLED_APPS = ["home", "search"]\n'
+    )
+    (package_directory / "__init__.py").write_text("")
+
+    home_directory = generated_directory / "home"
+    home_directory.mkdir()
+    (home_directory / "apps.py").write_text('    name = "home"\n')
+
+    result = _flatten_project_package(
+        generated_directory,
+        "example",
+        "sites.example",
+    )
+
+    assert result
+    assert (tmp_path / "sites" / "__init__.py").is_file()
+    settings = (generated_directory / "settings" / "base.py").read_text()
+    assert "PROJECT_DIR = Path(__file__).resolve().parent.parent" in settings
+    assert "BASE_DIR = PROJECT_DIR.parent.parent" in settings
+    assert 'INSTALLED_APPS = ["sites.example.home", "sites.example.search"]' in (
+        settings
+    )

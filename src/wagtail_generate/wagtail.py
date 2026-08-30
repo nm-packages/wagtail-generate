@@ -342,6 +342,13 @@ def _flatten_project_package(
         child.replace(generated_directory / child.name)
     package_directory.rmdir()
 
+    parent_directory = generated_directory.parent
+    for _ in range(len(destination_module.split(".")) - 1):
+        package_marker = parent_directory / "__init__.py"
+        if not package_marker.exists():
+            package_marker.write_text("")
+        parent_directory = parent_directory.parent
+
     old_prefix = f"{project_name}."
     new_prefix = f"{destination_module}."
     for python_file in generated_directory.rglob("*.py"):
@@ -358,6 +365,12 @@ def _flatten_project_package(
 
     settings_file = generated_directory / "settings" / "base.py"
     settings = settings_file.read_text()
+    source_depth = len(destination_module.split("."))
+    project_root_expression = "PROJECT_DIR" + ".parent" * source_depth
+    settings = settings.replace(
+        "BASE_DIR = PROJECT_DIR.parent",
+        f"BASE_DIR = {project_root_expression}",
+    )
     for app_name in ("home", "search"):
         settings = settings.replace(
             f'"{app_name}"',
