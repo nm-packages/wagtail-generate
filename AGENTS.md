@@ -26,7 +26,9 @@ creates opinionated Wagtail CMS projects from named codebase layouts.
 - Refuse to overwrite existing files unless the user explicitly opts in.
 - Never generate a site inside the `wagtail-generate` source checkout. Keep this
   guard ahead of directory creation and external command execution.
-- Keep output deterministic so generated projects can be tested reliably.
+- Resolve intentionally floating Python and package choices before writing, record
+  them in the generation plan and generated lock files, and keep rendered output
+  deterministic for those resolved inputs.
 - Separate template rendering from optional side effects such as running `uv`,
   Django, Git, or frontend commands.
 - Keep generated Docker, Compose, database settings, formatter configuration, and

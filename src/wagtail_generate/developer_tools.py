@@ -1,9 +1,23 @@
 """Generate local development, formatting, and database tooling."""
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
-from wagtail_generate.rendering import render_template, write_template
+from wagtail_generate.rendering import (
+    RenderedFile,
+    plan_template,
+    render_template,
+    write_rendered_files,
+)
+
+
+@dataclass(frozen=True)
+class DeveloperToolingPlan:
+    """Validated generated files and pyproject configuration."""
+
+    files: tuple[RenderedFile, ...]
+    pyproject_suffix: str
 
 
 def configure_database(settings_file: Path, database: str, project_name: str) -> None:
@@ -46,6 +60,22 @@ def write_developer_tooling(
     python_version: str,
 ) -> None:
     """Render Docker, Compose, formatter, pre-commit, and environment files."""
+    plan = build_developer_tooling_plan(
+        project_name=project_name,
+        settings_module=settings_module,
+        database=database,
+        python_version=python_version,
+    )
+    apply_developer_tooling_plan(project_directory, plan)
+
+
+def build_developer_tooling_plan(
+    project_name: str,
+    settings_module: str,
+    database: str,
+    python_version: str,
+) -> DeveloperToolingPlan:
+    """Render all developer-tooling files without writing to disk."""
     docker_context = {
         "python_version": python_version,
         "settings_module": settings_module,
@@ -58,47 +88,55 @@ def write_developer_tooling(
         ),
     }
     project_context = {"project_name": project_name, "database": database}
-
-    write_template(
-        project_directory / "Dockerfile",
-        "Dockerfile.jinja",
-        docker_context,
-    )
-    write_template(
-        project_directory / "compose.yaml",
-        f"compose/{database}.yaml.jinja",
-        project_context,
-    )
-    write_template(
-        project_directory / ".env.example",
-        f"env/{database}.example.jinja",
-        project_context,
-    )
-    write_template(project_directory / ".gitignore", "static/gitignore")
-    write_template(project_directory / ".dockerignore", "static/dockerignore")
-    write_template(
-        project_directory / "Makefile",
-        "Makefile.jinja",
-        project_context,
-    )
-    write_template(
-        project_directory / ".pre-commit-config.yaml",
-        "static/pre-commit-config.yaml",
-    )
-    write_template(
-        project_directory / "scripts" / "check_django_templates.py",
-        "static/check_django_templates.py",
-    )
+    files = [
+        plan_template("Dockerfile", "Dockerfile.jinja", docker_context),
+        plan_template(
+            "compose.yaml",
+            f"compose/{database}.yaml.jinja",
+            project_context,
+        ),
+        plan_template(
+            ".env.example",
+            f"env/{database}.example.jinja",
+            project_context,
+        ),
+        plan_template(".gitignore", "static/gitignore"),
+        plan_template(".dockerignore", "static/dockerignore"),
+        plan_template("Makefile", "Makefile.jinja", project_context),
+        plan_template(".pre-commit-config.yaml", "static/pre-commit-config.yaml"),
+        plan_template(
+            "scripts/check_django_templates.py",
+            "static/check_django_templates.py",
+        ),
+    ]
     if database == "mysql":
-        write_template(
-            project_directory / "docker" / "mysql-init.sh",
-            "static/mysql-init.sh",
-            mode=0o755,
+        files.append(
+            plan_template(
+                "docker/mysql-init.sh",
+                "static/mysql-init.sh",
+                mode=0o755,
+            )
         )
 
+    ruff_target = "py" + python_version.replace(".", "")
+    return DeveloperToolingPlan(
+        files=tuple(files),
+        pyproject_suffix=render_template(
+            "pyproject-tools.toml.jinja",
+            {"ruff_target": ruff_target},
+        ),
+    )
+
+
+def apply_developer_tooling_plan(
+    project_directory: Path,
+    plan: DeveloperToolingPlan,
+) -> None:
+    """Apply a validated developer-tooling plan to a generated project."""
+    write_rendered_files(project_directory, plan.files)
     _append_tool_configuration(
         project_directory / "pyproject.toml",
-        python_version,
+        plan.pyproject_suffix,
     )
 
 
@@ -111,14 +149,7 @@ def database_driver(database: str) -> str | None:
     return None
 
 
-def _append_tool_configuration(pyproject: Path, python_version: str) -> None:
+def _append_tool_configuration(pyproject: Path, configuration: str) -> None:
     content = pyproject.read_text()
     if "[tool.ruff]" not in content:
-        ruff_target = "py" + python_version.replace(".", "")
-        pyproject.write_text(
-            content.rstrip()
-            + render_template(
-                "pyproject-tools.toml.jinja",
-                {"ruff_target": ruff_target},
-            )
-        )
+        pyproject.write_text(content.rstrip() + configuration)

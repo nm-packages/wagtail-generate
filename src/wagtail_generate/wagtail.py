@@ -4,29 +4,92 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from wagtail_generate.developer_tools import (
+    DeveloperToolingPlan,
+    apply_developer_tooling_plan,
+    build_developer_tooling_plan,
     configure_database,
     database_driver,
-    write_developer_tooling,
 )
-from wagtail_generate.rendering import write_template
+from wagtail_generate.layouts import STANDARD_LAYOUT, Layout
+from wagtail_generate.rendering import RenderedFile, plan_template, write_rendered_files
 
 ROOT_FILES = (".dockerignore", "Dockerfile", "manage.py")
-UV_COMMAND = ("uvx", "uv@latest")
+UV_VERSION = "0.12.7"
+UV_COMMAND = ("uvx", f"uv@{UV_VERSION}")
+Database = Literal["sqlite3", "postgresql", "mysql"]
+
+
+@dataclass(frozen=True)
+class ProjectOptions:
+    """Validated user choices that determine a generated project."""
+
+    project_name: str
+    site_name: str
+    database: Database
+    project_root: Path
+    site_subfolder: Path | None
+    template: Path | None
+    layout: Layout = STANDARD_LAYOUT
+
+    @property
+    def source_directory(self) -> str:
+        """Return the source directory relative to the project root."""
+        return "." if self.site_subfolder is None else str(self.site_subfolder)
+
+    @property
+    def settings_module(self) -> str:
+        """Return the generated Django settings package."""
+        if self.site_subfolder is None:
+            return f"{self.project_name}.settings"
+        return f"{'.'.join(self.site_subfolder.parts)}.settings"
+
+
+@dataclass(frozen=True)
+class CommandPlan:
+    """One external command in a generation plan."""
+
+    arguments: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class GenerationPlan:
+    """A complete, rendered generation plan ready for side-effect execution."""
+
+    options: ProjectOptions
+    python_version: str
+    setup_commands: tuple[CommandPlan, ...]
+    wagtail_command: CommandPlan
+    formatting_commands: tuple[CommandPlan, ...]
+    developer_tooling: DeveloperToolingPlan
+    documentation_files: tuple[RenderedFile, ...]
 
 
 def run_wagtail_start(
     project_name: str,
     site_name: str | None = None,
-    database: str = "sqlite3",
+    database: Database = "sqlite3",
     project_root: Path | None = None,
     site_subfolder: Path | None = None,
     template: Path | None = None,
+    layout: Layout = STANDARD_LAYOUT,
 ) -> int:
     """Initialize a UV project, install Wagtail, and generate into that project."""
-    project_directory = project_root or Path.cwd()
+    project_directory = (project_root or Path.cwd()).resolve()
+    options = ProjectOptions(
+        project_name=project_name,
+        site_name=site_name or project_name.replace("_", " ").title(),
+        database=database,
+        project_root=project_directory,
+        site_subfolder=site_subfolder,
+        template=template,
+        layout=layout,
+    )
 
     if site_subfolder is not None:
         conflicts = [
@@ -43,72 +106,189 @@ def run_wagtail_start(
             return 2
 
     try:
-        python_version = latest_stable_python_version(project_directory)
+        python_version = latest_stable_python_version(
+            _nearest_existing_directory(project_directory)
+        )
+        plan = build_generation_plan(options, python_version)
     except (RuntimeError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
 
+    return execute_generation_plan(plan)
+
+
+def build_generation_plan(
+    options: ProjectOptions,
+    python_version: str,
+) -> GenerationPlan:
+    """Render and validate every generator-owned action before writing files."""
     runtime_dependencies = ["wagtail"]
-    driver = database_driver(database)
+    driver = database_driver(options.database)
     if driver is not None:
         runtime_dependencies.append(driver)
 
-    commands = [
-        [
-            *UV_COMMAND,
-            "init",
-            "--bare",
-            "--no-workspace",
-            "--python",
-            python_version,
-            "--name",
-            project_name,
-        ],
-        [*UV_COMMAND, "python", "pin", python_version],
-        [*UV_COMMAND, "add", *runtime_dependencies],
-        [*UV_COMMAND, "add", "--dev", "ruff", "djangofmt", "pre-commit"],
-    ]
-    for command in commands:
-        result = subprocess.run(command, cwd=project_directory, check=False)
-        if result.returncode != 0:
-            return result.returncode
+    setup_commands = (
+        CommandPlan(
+            (
+                *UV_COMMAND,
+                "init",
+                "--bare",
+                "--no-workspace",
+                "--python",
+                python_version,
+                "--name",
+                options.project_name,
+            )
+        ),
+        CommandPlan((*UV_COMMAND, "python", "pin", python_version)),
+        CommandPlan((*UV_COMMAND, "add", *runtime_dependencies)),
+        CommandPlan((*UV_COMMAND, "add", "--dev", "ruff", "djangofmt", "pre-commit")),
+    )
 
-    wagtail_destination = "."
-    if site_subfolder is not None:
-        (project_directory / site_subfolder).mkdir(parents=True, exist_ok=True)
-        wagtail_destination = str(site_subfolder)
-
-    command = [
+    wagtail_arguments = [
         *UV_COMMAND,
         "run",
         "wagtail",
         "start",
-        project_name,
-        wagtail_destination,
+        options.project_name,
+        options.source_directory,
     ]
-    if template is not None:
-        command.append(f"--template={template}")
+    if options.template is not None:
+        wagtail_arguments.append(f"--template={options.template}")
+
+    tooling = build_developer_tooling_plan(
+        project_name=options.project_name,
+        settings_module=options.settings_module,
+        database=options.database,
+        python_version=python_version,
+    )
+    template_description = (
+        f"custom template `{options.template}`"
+        if options.template is not None
+        else "the default Wagtail template"
+    )
+    documentation_context = {
+        "site_name": options.site_name,
+        "project_name": options.project_name,
+        "source_directory": options.source_directory,
+        "settings_module": options.settings_module,
+        "database": options.database,
+        "layout": options.layout.name,
+    }
+    documentation_files = (
+        plan_template(
+            "AGENTS.md",
+            options.layout.agents_template,
+            documentation_context | {"template_description": template_description},
+            overwrite=False,
+        ),
+        plan_template(
+            "README.md",
+            options.layout.readme_template,
+            documentation_context
+            | {
+                "database_name": {
+                    "sqlite3": "SQLite",
+                    "postgresql": "PostgreSQL",
+                    "mysql": "MySQL",
+                }[options.database],
+                "python_version": python_version,
+            },
+        ),
+    )
+    formatting_commands = (
+        CommandPlan((*UV_COMMAND, "run", "djangofmt", options.source_directory)),
+        CommandPlan(
+            (
+                *UV_COMMAND,
+                "run",
+                "ruff",
+                "check",
+                "--fix",
+                options.source_directory,
+            )
+        ),
+        CommandPlan(
+            (
+                *UV_COMMAND,
+                "run",
+                "ruff",
+                "format",
+                options.source_directory,
+                "manage.py",
+            )
+        ),
+    )
+    return GenerationPlan(
+        options=options,
+        python_version=python_version,
+        setup_commands=setup_commands,
+        wagtail_command=CommandPlan(tuple(wagtail_arguments)),
+        formatting_commands=formatting_commands,
+        developer_tooling=tooling,
+        documentation_files=documentation_files,
+    )
+
+
+def execute_generation_plan(plan: GenerationPlan) -> int:
+    """Execute a plan in staging and publish it only after complete success."""
+    project_directory = plan.options.project_root
+    staging_parent = _nearest_existing_directory(project_directory.parent)
+    with tempfile.TemporaryDirectory(
+        dir=staging_parent,
+        prefix=f".{project_directory.name}-",
+    ) as temporary_directory:
+        staging_directory = Path(temporary_directory)
+        result = _execute_generation_plan_in_directory(plan, staging_directory)
+        if result != 0:
+            return result
+        if not _publish_generated_project(staging_directory, project_directory):
+            return 2
+    return 0
+
+
+def _execute_generation_plan_in_directory(
+    plan: GenerationPlan,
+    project_directory: Path,
+) -> int:
+    """Execute a validated plan inside an isolated directory."""
+    options = plan.options
+
+    for command in plan.setup_commands:
+        result = subprocess.run(
+            list(command.arguments),
+            cwd=project_directory,
+            check=False,
+        )
+        if result.returncode != 0:
+            return result.returncode
+
+    if options.site_subfolder is not None:
+        (project_directory / options.site_subfolder).mkdir(
+            parents=True,
+            exist_ok=True,
+        )
 
     result = subprocess.run(
-        command,
+        list(plan.wagtail_command.arguments),
         cwd=project_directory,
         check=False,
     )
     if result.returncode != 0:
         return result.returncode
 
-    if site_subfolder is not None:
-        generated_directory = project_directory / site_subfolder
+    if options.site_subfolder is not None:
+        generated_directory = project_directory / options.site_subfolder
         if not _flatten_project_package(
             generated_directory,
-            project_name,
-            ".".join(site_subfolder.parts),
+            options.project_name,
+            ".".join(options.site_subfolder.parts),
         ):
             return 2
 
         _set_wagtail_site_name(
             generated_directory / "settings" / "base.py",
-            site_name or project_name.replace("_", " "),
+            options.site_name,
         )
         (generated_directory / "requirements.txt").unlink(missing_ok=True)
         (generated_directory / "README.md").unlink(missing_ok=True)
@@ -117,68 +297,53 @@ def run_wagtail_start(
             if source.exists():
                 source.replace(project_directory / filename)
         settings_file = generated_directory / "settings" / "base.py"
-        source_directory = str(site_subfolder)
-        settings_module = f"{'.'.join(site_subfolder.parts)}.settings"
     else:
-        settings_file = project_directory / project_name / "settings" / "base.py"
-        _set_wagtail_site_name(
-            settings_file, site_name or project_name.replace("_", " ")
+        settings_file = (
+            project_directory / options.project_name / "settings" / "base.py"
         )
+        _set_wagtail_site_name(settings_file, options.site_name)
         (project_directory / "requirements.txt").unlink(missing_ok=True)
-        source_directory = "."
-        settings_module = f"{project_name}.settings"
 
-    configure_database(settings_file, database, project_name)
-    write_developer_tooling(
-        project_directory=project_directory,
-        project_name=project_name,
-        settings_module=settings_module,
-        database=database,
-        python_version=python_version,
+    configure_database(
+        settings_file,
+        options.database,
+        options.project_name,
     )
+    apply_developer_tooling_plan(
+        project_directory,
+        plan.developer_tooling,
+    )
+    write_rendered_files(project_directory, plan.documentation_files)
 
-    _write_agents_file(
-        project_directory=project_directory,
-        project_name=project_name,
-        site_name=site_name or project_name.replace("_", " ").title(),
-        site_subfolder=site_subfolder,
-        database=database,
-        template=template,
-    )
-    _write_readme_file(
-        project_directory=project_directory,
-        project_name=project_name,
-        site_name=site_name or project_name.replace("_", " ").title(),
-        site_subfolder=site_subfolder,
-        database=database,
-        python_version=python_version,
-    )
-
-    format_result = subprocess.run(
-        [*UV_COMMAND, "run", "djangofmt", source_directory],
-        cwd=project_directory,
-        check=False,
-    )
-    if format_result.returncode != 0:
-        return format_result.returncode
-
-    lint_result = subprocess.run(
-        [*UV_COMMAND, "run", "ruff", "check", "--fix", source_directory],
-        cwd=project_directory,
-        check=False,
-    )
-    if lint_result.returncode != 0:
-        return lint_result.returncode
-
-    python_format_result = subprocess.run(
-        [*UV_COMMAND, "run", "ruff", "format", source_directory, "manage.py"],
-        cwd=project_directory,
-        check=False,
-    )
-    if python_format_result.returncode != 0:
-        return python_format_result.returncode
+    for command in plan.formatting_commands:
+        result = subprocess.run(
+            list(command.arguments),
+            cwd=project_directory,
+            check=False,
+        )
+        if result.returncode != 0:
+            return result.returncode
 
     return 0
+
+
+def _publish_generated_project(staging_directory: Path, destination: Path) -> bool:
+    """Move a completed staged project into an absent or empty destination."""
+    if destination.exists():
+        existing_entries = list(destination.iterdir())
+        if existing_entries:
+            print(
+                f"error: project root became nonempty during generation: {destination}",
+                file=sys.stderr,
+            )
+            return False
+        for child in staging_directory.iterdir():
+            child.replace(destination / child.name)
+        return True
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    staging_directory.replace(destination)
+    return True
 
 
 def _set_wagtail_site_name(settings_file: Path, site_name: str) -> None:
@@ -194,77 +359,12 @@ def _set_wagtail_site_name(settings_file: Path, site_name: str) -> None:
         settings_file.write_text(updated)
 
 
-def _write_agents_file(
-    project_directory: Path,
-    project_name: str,
-    site_name: str,
-    site_subfolder: Path | None,
-    database: str,
-    template: Path | None,
-) -> None:
-    """Write project guidance customized for the generated Wagtail layout."""
-    agents_file = project_directory / "AGENTS.md"
-    if agents_file.exists():
-        return
-
-    if site_subfolder is None:
-        source_directory = "."
-        settings_module = f"{project_name}.settings"
-    else:
-        source_directory = str(site_subfolder)
-        settings_module = f"{'.'.join(site_subfolder.parts)}.settings"
-
-    template_description = (
-        f"custom template `{template}`"
-        if template is not None
-        else "the default Wagtail template"
-    )
-    write_template(
-        agents_file,
-        "AGENTS.md.jinja",
-        {
-            "site_name": site_name,
-            "template_description": template_description,
-            "project_name": project_name,
-            "source_directory": source_directory,
-            "settings_module": settings_module,
-            "database": database,
-        },
-    )
-
-
-def _write_readme_file(
-    project_directory: Path,
-    project_name: str,
-    site_name: str,
-    site_subfolder: Path | None,
-    database: str,
-    python_version: str,
-) -> None:
-    """Write setup and development instructions for the generated project."""
-    source_directory = "." if site_subfolder is None else str(site_subfolder)
-    settings_module = (
-        f"{project_name}.settings"
-        if site_subfolder is None
-        else f"{'.'.join(site_subfolder.parts)}.settings"
-    )
-    write_template(
-        project_directory / "README.md",
-        "README.md.jinja",
-        {
-            "site_name": site_name,
-            "project_name": project_name,
-            "source_directory": source_directory,
-            "settings_module": settings_module,
-            "database": database,
-            "database_name": {
-                "sqlite3": "SQLite",
-                "postgresql": "PostgreSQL",
-                "mysql": "MySQL",
-            }[database],
-            "python_version": python_version,
-        },
-    )
+def _nearest_existing_directory(path: Path) -> Path:
+    """Return an existing directory suitable for read-only UV resolution."""
+    candidate = path
+    while not candidate.exists():
+        candidate = candidate.parent
+    return candidate if candidate.is_dir() else candidate.parent
 
 
 def latest_stable_python_version(project_directory: Path) -> str:

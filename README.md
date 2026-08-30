@@ -32,6 +32,14 @@ install the latest resolvable Wagtail release, and generate the site into it:
 uv run wagtail-generate start mysite
 ```
 
+The stable `standard` layout is selected by default. It provides the UV, Docker,
+database, formatting, and project-guidance setup described below. Select it
+explicitly when scripts should record the chosen layout:
+
+```shell
+uv run wagtail-generate start mysite --layout standard
+```
+
 Human-readable names are accepted and converted to valid lowercase Python package
 names. For example, `start "This is my site"` uses `this_is_my_site` for Wagtail's
 project package and as the default site subfolder.
@@ -165,13 +173,17 @@ uv run wagtail-generate start mysite --template templates/custom
 Without a site subfolder, the command runs the equivalent of:
 
 ```shell
-uvx uv@latest python list --only-downloads --output-format json
-uvx uv@latest init --bare --no-workspace --python <latest-stable-major.minor>
-uvx uv@latest python pin <latest-stable-major.minor>
-uvx uv@latest add wagtail
-uvx uv@latest add --dev ruff djangofmt pre-commit
-uvx uv@latest run wagtail start mysite .
+uvx uv@0.12.7 python list --only-downloads --output-format json
+uvx uv@0.12.7 init --bare --no-workspace --python <latest-stable-major.minor>
+uvx uv@0.12.7 python pin <latest-stable-major.minor>
+uvx uv@0.12.7 add wagtail
+uvx uv@0.12.7 add --dev ruff djangofmt pre-commit
+uvx uv@0.12.7 run wagtail start mysite .
 ```
+
+The generator pins its UV command version to match the generated Dockerfile. The
+selected Python line and resolved dependencies are then recorded in
+`.python-version` and `uv.lock`, making the completed project repeatable.
 
 SQLite needs no additional database driver. The driver is `psycopg[binary]` for
 PostgreSQL or `mysqlclient` for MySQL.

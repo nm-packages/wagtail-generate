@@ -2,6 +2,7 @@
 
 import subprocess
 from pathlib import Path
+from typing import cast
 from unittest.mock import Mock, patch
 
 import pytest
@@ -13,27 +14,14 @@ from wagtail_generate.wagtail import (
 )
 
 
-@patch(
-    "wagtail_generate.wagtail.latest_stable_python_version",
-    return_value="3.14",
-)
-@patch("wagtail_generate.wagtail.subprocess.run")
-def test_run_wagtail_start_streams_native_command(
-    run: Mock,
-    resolve_python: Mock,
-    tmp_path: Path,
-) -> None:
-    run.return_value = subprocess.CompletedProcess([], returncode=0)
-    project_root = tmp_path / "generated"
-    project_root.mkdir()
+def write_mock_wagtail_project(project_root: Path) -> None:
+    """Create the relevant subset of Wagtail's default generated tree."""
     (project_root / "pyproject.toml").write_text(
         '[project]\nname = "example"\nversion = "0.1.0"\n'
     )
     site_directory = project_root / "site"
-    site_directory.mkdir()
     moved_root_files = (".dockerignore", "Dockerfile", "manage.py")
-    generated_root_files = (*moved_root_files, "requirements.txt")
-    for filename in generated_root_files:
+    for filename in (*moved_root_files, "requirements.txt"):
         content = (
             'os.environ.setdefault("DJANGO_SETTINGS_MODULE", "example.settings.dev")'
         )
@@ -66,8 +54,31 @@ def test_run_wagtail_start_streams_native_command(
     (home_directory / "tests.py").write_text("from home.models import HomePage")
     migrations = home_directory / "migrations"
     migrations.mkdir()
-    migration = migrations / "0002_create_homepage.py"
-    migration.write_text('HomePage = apps.get_model("home.HomePage")')
+    (migrations / "0002_create_homepage.py").write_text(
+        'HomePage = apps.get_model("home.HomePage")'
+    )
+
+
+@patch(
+    "wagtail_generate.wagtail.latest_stable_python_version",
+    return_value="3.14",
+)
+@patch("wagtail_generate.wagtail.subprocess.run")
+def test_run_wagtail_start_streams_native_command(
+    run: Mock,
+    resolve_python: Mock,
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / "generated"
+
+    def run_command(
+        command: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess:
+        if "wagtail" in command and "start" in command:
+            write_mock_wagtail_project(cast(Path, kwargs["cwd"]))
+        return subprocess.CompletedProcess(command, returncode=0)
+
+    run.side_effect = run_command
 
     result = run_wagtail_start(
         "example",
@@ -79,6 +90,11 @@ def test_run_wagtail_start_streams_native_command(
     )
 
     assert result == 0
+    site_directory = project_root / "site"
+    moved_root_files = (".dockerignore", "Dockerfile", "manage.py")
+    package_directory = site_directory / "example"
+    home_directory = site_directory / "home"
+    migration = home_directory / "migrations" / "0002_create_homepage.py"
     assert (project_root / "site").is_dir()
     for filename in moved_root_files:
         assert (project_root / filename).is_file()
@@ -90,6 +106,7 @@ def test_run_wagtail_start_streams_native_command(
     assert readme.startswith("# Example website")
     assert "Site source: `site`" in readme
     assert "Django settings: `site.settings`" in readme
+    assert "Codebase layout: `standard`" in readme
     assert "Database: PostgreSQL" in readme
     assert "Python: 3.14" in readme
     assert "cp .env.example .env\nmake dev" in readme
@@ -102,6 +119,7 @@ def test_run_wagtail_start_streams_native_command(
     agents = (project_root / "AGENTS.md").read_text()
     assert "Example website" in agents
     assert "Python project package: `example`" in agents
+    assert "Codebase layout: `standard`" in agents
     assert "Site source directory: `site`" in agents
     assert "Django settings package: `site.settings`" in agents
     assert "Database: `postgresql`" in agents
@@ -134,12 +152,14 @@ def test_run_wagtail_start_streams_native_command(
         "from site.home.models import HomePage"
     )
     assert migration.read_text() == 'HomePage = apps.get_model("home.HomePage")'
+    generation_directory = run.call_args_list[0].kwargs["cwd"]
+    assert generation_directory.parent == tmp_path
     assert run.call_args_list == [
         (
             (
                 [
                     "uvx",
-                    "uv@latest",
+                    "uv@0.12.7",
                     "init",
                     "--bare",
                     "--no-workspace",
@@ -149,21 +169,21 @@ def test_run_wagtail_start_streams_native_command(
                     "example",
                 ],
             ),
-            {"cwd": project_root, "check": False},
+            {"cwd": generation_directory, "check": False},
         ),
         (
-            (["uvx", "uv@latest", "python", "pin", "3.14"],),
-            {"cwd": project_root, "check": False},
+            (["uvx", "uv@0.12.7", "python", "pin", "3.14"],),
+            {"cwd": generation_directory, "check": False},
         ),
         (
-            (["uvx", "uv@latest", "add", "wagtail", "psycopg[binary]"],),
-            {"cwd": project_root, "check": False},
+            (["uvx", "uv@0.12.7", "add", "wagtail", "psycopg[binary]"],),
+            {"cwd": generation_directory, "check": False},
         ),
         (
             (
                 [
                     "uvx",
-                    "uv@latest",
+                    "uv@0.12.7",
                     "add",
                     "--dev",
                     "ruff",
@@ -171,13 +191,13 @@ def test_run_wagtail_start_streams_native_command(
                     "pre-commit",
                 ],
             ),
-            {"cwd": project_root, "check": False},
+            {"cwd": generation_directory, "check": False},
         ),
         (
             (
                 [
                     "uvx",
-                    "uv@latest",
+                    "uv@0.12.7",
                     "run",
                     "wagtail",
                     "start",
@@ -186,21 +206,21 @@ def test_run_wagtail_start_streams_native_command(
                     "--template=custom-template",
                 ],
             ),
-            {"cwd": project_root, "check": False},
+            {"cwd": generation_directory, "check": False},
         ),
         (
-            (["uvx", "uv@latest", "run", "djangofmt", "site"],),
-            {"cwd": project_root, "check": False},
+            (["uvx", "uv@0.12.7", "run", "djangofmt", "site"],),
+            {"cwd": generation_directory, "check": False},
         ),
         (
-            (["uvx", "uv@latest", "run", "ruff", "check", "--fix", "site"],),
-            {"cwd": project_root, "check": False},
+            (["uvx", "uv@0.12.7", "run", "ruff", "check", "--fix", "site"],),
+            {"cwd": generation_directory, "check": False},
         ),
         (
             (
                 [
                     "uvx",
-                    "uv@latest",
+                    "uv@0.12.7",
                     "run",
                     "ruff",
                     "format",
@@ -208,10 +228,10 @@ def test_run_wagtail_start_streams_native_command(
                     "manage.py",
                 ],
             ),
-            {"cwd": project_root, "check": False},
+            {"cwd": generation_directory, "check": False},
         ),
     ]
-    resolve_python.assert_called_once_with(project_root)
+    resolve_python.assert_called_once_with(tmp_path)
 
 
 @patch(
@@ -222,14 +242,17 @@ def test_run_wagtail_start_streams_native_command(
 def test_run_wagtail_start_stops_after_failed_uv_command(
     run: Mock,
     resolve_python: Mock,
+    tmp_path: Path,
 ) -> None:
     run.return_value = subprocess.CompletedProcess([], returncode=2)
+    project_root = tmp_path / "generated"
 
-    assert run_wagtail_start("example", project_root=Path("generated")) == 2
+    assert run_wagtail_start("example", project_root=project_root) == 2
+    generation_directory = run.call_args.kwargs["cwd"]
     run.assert_called_once_with(
         [
             "uvx",
-            "uv@latest",
+            "uv@0.12.7",
             "init",
             "--bare",
             "--no-workspace",
@@ -238,10 +261,12 @@ def test_run_wagtail_start_stops_after_failed_uv_command(
             "--name",
             "example",
         ],
-        cwd=Path("generated"),
+        cwd=generation_directory,
         check=False,
     )
-    resolve_python.assert_called_once_with(Path("generated"))
+    assert generation_directory.parent == tmp_path
+    assert not project_root.exists()
+    resolve_python.assert_called_once_with(tmp_path)
 
 
 @patch(
@@ -252,6 +277,7 @@ def test_run_wagtail_start_stops_after_failed_uv_command(
 def test_run_wagtail_start_defaults_to_sqlite_without_driver(
     run: Mock,
     resolve_python: Mock,
+    tmp_path: Path,
 ) -> None:
     run.side_effect = [
         subprocess.CompletedProcess([], returncode=0),
@@ -259,12 +285,50 @@ def test_run_wagtail_start_defaults_to_sqlite_without_driver(
         subprocess.CompletedProcess([], returncode=1),
     ]
 
-    assert run_wagtail_start("example", project_root=Path("generated")) == 1
+    project_root = tmp_path / "generated"
+
+    assert run_wagtail_start("example", project_root=project_root) == 1
+    generation_directory = run.call_args_list[0].kwargs["cwd"]
     assert run.call_args_list[2] == (
-        (["uvx", "uv@latest", "add", "wagtail"],),
-        {"cwd": Path("generated"), "check": False},
+        (["uvx", "uv@0.12.7", "add", "wagtail"],),
+        {"cwd": generation_directory, "check": False},
     )
-    resolve_python.assert_called_once_with(Path("generated"))
+    assert generation_directory.parent == tmp_path
+    assert not project_root.exists()
+    resolve_python.assert_called_once_with(tmp_path)
+
+
+@patch(
+    "wagtail_generate.wagtail.latest_stable_python_version",
+    return_value="3.14",
+)
+@patch("wagtail_generate.wagtail.subprocess.run")
+def test_late_command_failure_does_not_publish_partial_project(
+    run: Mock,
+    resolve_python: Mock,
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / "generated"
+
+    def run_command(
+        command: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess:
+        if "wagtail" in command and "start" in command:
+            write_mock_wagtail_project(cast(Path, kwargs["cwd"]))
+        return_code = 7 if "djangofmt" in command else 0
+        return subprocess.CompletedProcess(command, returncode=return_code)
+
+    run.side_effect = run_command
+
+    result = run_wagtail_start(
+        "example",
+        project_root=project_root,
+        site_subfolder=Path("site"),
+    )
+
+    assert result == 7
+    assert not project_root.exists()
+    resolve_python.assert_called_once_with(tmp_path)
 
 
 @patch("wagtail_generate.wagtail.subprocess.run")
@@ -287,7 +351,7 @@ def test_latest_stable_python_version_uses_uv_download_catalog(run: Mock) -> Non
     run.assert_called_once_with(
         [
             "uvx",
-            "uv@latest",
+            "uv@0.12.7",
             "python",
             "list",
             "--only-downloads",

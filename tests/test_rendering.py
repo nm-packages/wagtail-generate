@@ -35,6 +35,7 @@ def test_sqlite_readme_quick_start_does_not_require_env_file() -> None:
         {
             "site_name": "Example",
             "project_name": "example",
+            "layout": "standard",
             "source_directory": ".",
             "settings_module": "example.settings",
             "database": "sqlite3",

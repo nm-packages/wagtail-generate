@@ -7,16 +7,14 @@ import sys
 import unicodedata
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Literal
 
 from wagtail_generate import __version__
+from wagtail_generate.layouts import get_layout, layout_names
 from wagtail_generate.safety import (
     destination_is_in_source_checkout,
     source_checkout_root,
 )
-from wagtail_generate.wagtail import run_wagtail_start
-
-Database = Literal["sqlite3", "postgresql", "mysql"]
+from wagtail_generate.wagtail import Database, run_wagtail_start
 
 
 def normalize_package_name(value: str) -> str:
@@ -135,6 +133,12 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     start_parser.add_argument(
+        "--layout",
+        choices=layout_names(),
+        default="standard",
+        help="Named codebase layout; defaults to standard.",
+    )
+    start_parser.add_argument(
         "--template",
         type=Path,
         help="Optional custom Wagtail project template path.",
@@ -167,6 +171,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         project_root = arguments.directory or (
             Path.cwd() / normalize_package_name(site_name)
         )
+        project_root = project_root.resolve()
         project_root_exists = project_root.exists()
 
         checkout_root = source_checkout_root()
@@ -233,19 +238,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
                 return 2
 
-        project_root.mkdir(parents=True, exist_ok=True)
-        if arguments.directory is None:
-            action = "Using" if project_root_exists else "Created"
-            print(f"{action} project directory: {project_root}", flush=True)
-
-        return run_wagtail_start(
+        result = run_wagtail_start(
             project_name=project_name,
             site_name=site_name,
             database=database,
             project_root=project_root,
             site_subfolder=site_subfolder,
             template=template,
+            layout=get_layout(arguments.layout),
         )
+        if result == 0 and arguments.directory is None:
+            action = "Using" if project_root_exists else "Created"
+            print(f"{action} project directory: {project_root}", flush=True)
+        return result
 
     parser.print_help()
     return 0
