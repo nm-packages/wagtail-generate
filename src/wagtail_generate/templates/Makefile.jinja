@@ -21,7 +21,8 @@ dev: ## Run Wagtail locally
 	uv run python manage.py runserver
 
 docker: ## Build and run the complete development environment
-	docker compose up --build
+	docker compose build --pull
+	docker compose up
 
 stop: ## Stop the development containers
 	docker compose down

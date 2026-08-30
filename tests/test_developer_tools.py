@@ -38,6 +38,7 @@ def test_mysql_settings_and_tooling_are_consistent(tmp_path: Path) -> None:
         project_name="example",
         settings_module="src.settings",
         database="mysql",
+        python_version="3.14",
     )
 
     content = settings.read_text()
@@ -48,12 +49,16 @@ def test_mysql_settings_and_tooling_are_consistent(tmp_path: Path) -> None:
     assert "mysql:8.4" in (tmp_path / "compose.yaml").read_text()
     dockerfile = (tmp_path / "Dockerfile").read_text()
     assert "default-libmysqlclient-dev" in dockerfile
-    assert "RUN chown wagtail:wagtail /app" in dockerfile
+    assert "FROM python:3.14-slim AS development" in dockerfile
+    assert "gunicorn" not in dockerfile
+    assert ".production" not in dockerfile
     makefile = (tmp_path / "Makefile").read_text()
     assert "dev: ## Run Wagtail locally" in makefile
     assert "docker compose up -d --wait db" in makefile
     assert "uv run python manage.py runserver" in makefile
     assert "check: lint test" in makefile
+    assert "docker compose build --pull" in makefile
+    assert 'target-version = "py314"' in (tmp_path / "pyproject.toml").read_text()
     assert "MYSQL_ROOT_PASSWORD" in (tmp_path / ".env.example").read_text()
     compose = (tmp_path / "compose.yaml").read_text()
     assert "docker/mysql-init.sh" in compose
@@ -88,6 +93,7 @@ def test_sqlite_needs_no_server_or_database_driver(tmp_path: Path) -> None:
         project_name="example",
         settings_module="example.settings",
         database="sqlite3",
+        python_version="3.15",
     )
 
     content = settings.read_text()
@@ -106,5 +112,7 @@ def test_sqlite_needs_no_server_or_database_driver(tmp_path: Path) -> None:
     assert (tmp_path / ".env.example").read_text() == "WEB_PORT=8000\n"
     dockerfile = (tmp_path / "Dockerfile").read_text()
     assert "libpq" not in dockerfile
-    assert "libmariadb" not in dockerfile
     assert "default-libmysqlclient" not in dockerfile
+    assert "gunicorn" not in dockerfile
+    assert "FROM python:3.15-slim AS development" in dockerfile
+    assert 'target-version = "py315"' in (tmp_path / "pyproject.toml").read_text()

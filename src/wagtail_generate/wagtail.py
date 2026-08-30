@@ -7,7 +7,6 @@ import sys
 from pathlib import Path
 
 from wagtail_generate.developer_tools import (
-    TARGET_PYTHON_VERSION,
     configure_database,
     database_driver,
     write_developer_tooling,
@@ -15,6 +14,7 @@ from wagtail_generate.developer_tools import (
 from wagtail_generate.rendering import write_template
 
 ROOT_FILES = (".dockerignore", "Dockerfile", "manage.py")
+UV_COMMAND = ("uvx", "uv@latest")
 
 
 def run_wagtail_start(
@@ -42,25 +42,31 @@ def run_wagtail_start(
             )
             return 2
 
-    runtime_dependencies = ["wagtail", "gunicorn"]
+    try:
+        python_version = latest_stable_python_version(project_directory)
+    except (RuntimeError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    runtime_dependencies = ["wagtail"]
     driver = database_driver(database)
     if driver is not None:
         runtime_dependencies.append(driver)
 
     commands = [
         [
-            "uv",
+            *UV_COMMAND,
             "init",
             "--bare",
             "--no-workspace",
             "--python",
-            TARGET_PYTHON_VERSION,
+            python_version,
             "--name",
             project_name,
         ],
-        ["uv", "python", "pin", TARGET_PYTHON_VERSION],
-        ["uv", "add", *runtime_dependencies],
-        ["uv", "add", "--dev", "ruff", "djangofmt", "pre-commit"],
+        [*UV_COMMAND, "python", "pin", python_version],
+        [*UV_COMMAND, "add", *runtime_dependencies],
+        [*UV_COMMAND, "add", "--dev", "ruff", "djangofmt", "pre-commit"],
     ]
     for command in commands:
         result = subprocess.run(command, cwd=project_directory, check=False)
@@ -73,7 +79,7 @@ def run_wagtail_start(
         wagtail_destination = str(site_subfolder)
 
     command = [
-        "uv",
+        *UV_COMMAND,
         "run",
         "wagtail",
         "start",
@@ -128,6 +134,7 @@ def run_wagtail_start(
         project_name=project_name,
         settings_module=settings_module,
         database=database,
+        python_version=python_version,
     )
 
     _write_agents_file(
@@ -144,10 +151,11 @@ def run_wagtail_start(
         site_name=site_name or project_name.replace("_", " ").title(),
         site_subfolder=site_subfolder,
         database=database,
+        python_version=python_version,
     )
 
     format_result = subprocess.run(
-        ["uv", "run", "djangofmt", source_directory],
+        [*UV_COMMAND, "run", "djangofmt", source_directory],
         cwd=project_directory,
         check=False,
     )
@@ -155,7 +163,7 @@ def run_wagtail_start(
         return format_result.returncode
 
     lint_result = subprocess.run(
-        ["uv", "run", "ruff", "check", "--fix", source_directory],
+        [*UV_COMMAND, "run", "ruff", "check", "--fix", source_directory],
         cwd=project_directory,
         check=False,
     )
@@ -163,7 +171,7 @@ def run_wagtail_start(
         return lint_result.returncode
 
     python_format_result = subprocess.run(
-        ["uv", "run", "ruff", "format", source_directory, "manage.py"],
+        [*UV_COMMAND, "run", "ruff", "format", source_directory, "manage.py"],
         cwd=project_directory,
         check=False,
     )
@@ -231,6 +239,7 @@ def _write_readme_file(
     site_name: str,
     site_subfolder: Path | None,
     database: str,
+    python_version: str,
 ) -> None:
     """Write setup and development instructions for the generated project."""
     source_directory = "." if site_subfolder is None else str(site_subfolder)
@@ -253,9 +262,53 @@ def _write_readme_file(
                 "postgresql": "PostgreSQL",
                 "mysql": "MySQL",
             }[database],
-            "python_version": TARGET_PYTHON_VERSION,
+            "python_version": python_version,
         },
     )
+
+
+def latest_stable_python_version(project_directory: Path) -> str:
+    """Return the major/minor line of the newest stable CPython known to UV."""
+    result = subprocess.run(
+        [
+            *UV_COMMAND,
+            "python",
+            "list",
+            "--only-downloads",
+            "--output-format",
+            "json",
+        ],
+        cwd=project_directory,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or "UV could not list Python downloads"
+        raise RuntimeError(detail)
+
+    downloads = json.loads(result.stdout)
+    if not isinstance(downloads, list):
+        raise ValueError("UV returned an invalid Python download list")
+
+    versions: list[str] = []
+    for download in downloads:
+        if not isinstance(download, dict):
+            continue
+        version = download.get("version")
+        if (
+            download.get("implementation") == "cpython"
+            and download.get("variant") == "default"
+            and isinstance(version, str)
+            and re.fullmatch(r"\d+\.\d+\.\d+", version)
+        ):
+            versions.append(version)
+
+    if not versions:
+        raise ValueError("UV did not report a stable CPython download")
+    latest = max(versions, key=lambda version: tuple(map(int, version.split("."))))
+    major, minor, _ = latest.split(".")
+    return f"{major}.{minor}"
 
 
 def _flatten_project_package(

@@ -1,4 +1,4 @@
-FROM python:{{ python_version }}-slim-bookworm AS builder
+FROM python:{{ python_version }}-slim AS development
 
 COPY --from=ghcr.io/astral-sh/uv:0.12.7 /uv /uvx /bin/
 
@@ -16,12 +16,6 @@ RUN apt-get update --yes --quiet \
 
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev --no-install-project
-
-
-FROM builder AS development
-
-RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-install-project
 
 COPY . .
@@ -29,31 +23,3 @@ COPY . .
 ENV DJANGO_SETTINGS_MODULE={{ settings_module }}.dev
 
 CMD ["uv", "run", "python", "manage.py", "runserver", "0.0.0.0:8000"]
-
-
-FROM python:{{ python_version }}-slim-bookworm AS runtime
-
-RUN apt-get update --yes --quiet \
-    && apt-get install --yes --quiet --no-install-recommends \
-        {% if runtime_database_packages %}{{ runtime_database_packages }} {% endif %}libjpeg62-turbo libwebp7 \
-    && rm -rf /var/lib/apt/lists/* \
-    && useradd --create-home wagtail
-
-ENV PATH="/app/.venv/bin:$PATH" \
-    PYTHONUNBUFFERED=1 \
-    DJANGO_SETTINGS_MODULE={{ settings_module }}.production
-
-WORKDIR /app
-
-COPY --from=builder /app/.venv /app/.venv
-COPY --chown=wagtail:wagtail . .
-
-RUN chown wagtail:wagtail /app
-
-USER wagtail
-
-RUN python manage.py collectstatic --noinput --clear
-
-EXPOSE 8000
-
-CMD ["gunicorn", "{{ wsgi_module }}.wsgi:application", "--bind", "0.0.0.0:8000"]

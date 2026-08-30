@@ -27,11 +27,9 @@ def test_write_template_renders_content_and_applies_mode(tmp_path: Path) -> None
         destination,
         "Dockerfile.jinja",
         {
-            "python_version": "3.12",
+            "python_version": "3.14",
             "settings_module": "src.settings",
-            "wsgi_module": "src",
             "build_database_packages": "libpq-dev",
-            "runtime_database_packages": "libpq5",
         },
         mode=0o700,
     )

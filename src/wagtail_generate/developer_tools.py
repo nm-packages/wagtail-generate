@@ -3,9 +3,7 @@
 import re
 from pathlib import Path
 
-from wagtail_generate.rendering import render_template, template_text, write_template
-
-TARGET_PYTHON_VERSION = "3.12"
+from wagtail_generate.rendering import render_template, write_template
 
 
 def configure_database(settings_file: Path, database: str, project_name: str) -> None:
@@ -45,23 +43,16 @@ def write_developer_tooling(
     project_name: str,
     settings_module: str,
     database: str,
+    python_version: str,
 ) -> None:
     """Render Docker, Compose, formatter, pre-commit, and environment files."""
     docker_context = {
-        "python_version": TARGET_PYTHON_VERSION,
+        "python_version": python_version,
         "settings_module": settings_module,
-        "wsgi_module": settings_module.removesuffix(".settings"),
         "build_database_packages": (
             "libpq-dev"
             if database == "postgresql"
             else "default-libmysqlclient-dev pkg-config"
-            if database == "mysql"
-            else ""
-        ),
-        "runtime_database_packages": (
-            "libpq5"
-            if database == "postgresql"
-            else "libmariadb3"
             if database == "mysql"
             else ""
         ),
@@ -101,7 +92,10 @@ def write_developer_tooling(
             mode=0o755,
         )
 
-    _append_tool_configuration(project_directory / "pyproject.toml")
+    _append_tool_configuration(
+        project_directory / "pyproject.toml",
+        python_version,
+    )
 
 
 def database_driver(database: str) -> str | None:
@@ -113,9 +107,14 @@ def database_driver(database: str) -> str | None:
     return None
 
 
-def _append_tool_configuration(pyproject: Path) -> None:
+def _append_tool_configuration(pyproject: Path, python_version: str) -> None:
     content = pyproject.read_text()
     if "[tool.ruff]" not in content:
+        ruff_target = "py" + python_version.replace(".", "")
         pyproject.write_text(
-            content.rstrip() + template_text("static/pyproject-tools.toml")
+            content.rstrip()
+            + render_template(
+                "pyproject-tools.toml.jinja",
+                {"ruff_target": ruff_target},
+            )
         )

@@ -43,6 +43,10 @@ cp .env.example .env
 make docker
 ```
 
+`make docker` refreshes the floating `python:{{ python_version }}-slim`
+development image before starting the services. This keeps Docker on the same
+Python major/minor line while allowing patch updates.
+
 Compose {% if database != "sqlite3" %}waits for {{ database_name }}, {% endif %}applies migrations and serves
 Wagtail at <http://localhost:8000>. Create an administrator in another terminal:
 

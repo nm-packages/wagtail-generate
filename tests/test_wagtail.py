@@ -6,12 +6,17 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from wagtail_generate.wagtail import run_wagtail_start
+from wagtail_generate.wagtail import latest_stable_python_version, run_wagtail_start
 
 
+@patch(
+    "wagtail_generate.wagtail.latest_stable_python_version",
+    return_value="3.14",
+)
 @patch("wagtail_generate.wagtail.subprocess.run")
 def test_run_wagtail_start_streams_native_command(
     run: Mock,
+    resolve_python: Mock,
     tmp_path: Path,
 ) -> None:
     run.return_value = subprocess.CompletedProcess([], returncode=0)
@@ -82,6 +87,7 @@ def test_run_wagtail_start_streams_native_command(
     assert "Site source: `site`" in readme
     assert "Django settings: `site.settings`" in readme
     assert "Database: PostgreSQL" in readme
+    assert "Python: 3.14" in readme
     assert "make dev" in readme
     assert "make docker" in readme
     assert "make check" in readme
@@ -98,8 +104,14 @@ def test_run_wagtail_start_streams_native_command(
     assert "postgres:17-bookworm" in (project_root / "compose.yaml").read_text()
     assert (project_root / "Makefile").is_file()
     assert "uv sync --locked" in (project_root / "Dockerfile").read_text()
+    assert "FROM python:3.14-slim AS development" in (
+        project_root / "Dockerfile"
+    ).read_text()
     assert (project_root / ".pre-commit-config.yaml").is_file()
     assert "[tool.djangofmt]" in (project_root / "pyproject.toml").read_text()
+    assert 'target-version = "py314"' in (
+        project_root / "pyproject.toml"
+    ).read_text()
     assert (project_root / ".env.example").is_file()
     assert not package_directory.exists()
     assert (site_directory / "settings" / "base.py").is_file()
@@ -121,12 +133,13 @@ def test_run_wagtail_start_streams_native_command(
         (
             (
                 [
-                    "uv",
+                    "uvx",
+                    "uv@latest",
                     "init",
                     "--bare",
                     "--no-workspace",
                     "--python",
-                    "3.12",
+                    "3.14",
                     "--name",
                     "example",
                 ],
@@ -134,21 +147,32 @@ def test_run_wagtail_start_streams_native_command(
             {"cwd": project_root, "check": False},
         ),
         (
-            (["uv", "python", "pin", "3.12"],),
+            (["uvx", "uv@latest", "python", "pin", "3.14"],),
             {"cwd": project_root, "check": False},
         ),
         (
-            (["uv", "add", "wagtail", "gunicorn", "psycopg[binary]"],),
-            {"cwd": project_root, "check": False},
-        ),
-        (
-            (["uv", "add", "--dev", "ruff", "djangofmt", "pre-commit"],),
+            (["uvx", "uv@latest", "add", "wagtail", "psycopg[binary]"],),
             {"cwd": project_root, "check": False},
         ),
         (
             (
                 [
-                    "uv",
+                    "uvx",
+                    "uv@latest",
+                    "add",
+                    "--dev",
+                    "ruff",
+                    "djangofmt",
+                    "pre-commit",
+                ],
+            ),
+            {"cwd": project_root, "check": False},
+        ),
+        (
+            (
+                [
+                    "uvx",
+                    "uv@latest",
                     "run",
                     "wagtail",
                     "start",
@@ -160,43 +184,70 @@ def test_run_wagtail_start_streams_native_command(
             {"cwd": project_root, "check": False},
         ),
         (
-            (["uv", "run", "djangofmt", "site"],),
+            (["uvx", "uv@latest", "run", "djangofmt", "site"],),
             {"cwd": project_root, "check": False},
         ),
         (
-            (["uv", "run", "ruff", "check", "--fix", "site"],),
+            (["uvx", "uv@latest", "run", "ruff", "check", "--fix", "site"],),
             {"cwd": project_root, "check": False},
         ),
         (
-            (["uv", "run", "ruff", "format", "site", "manage.py"],),
+            (
+                [
+                    "uvx",
+                    "uv@latest",
+                    "run",
+                    "ruff",
+                    "format",
+                    "site",
+                    "manage.py",
+                ],
+            ),
             {"cwd": project_root, "check": False},
         ),
     ]
+    resolve_python.assert_called_once_with(project_root)
 
 
+@patch(
+    "wagtail_generate.wagtail.latest_stable_python_version",
+    return_value="3.14",
+)
 @patch("wagtail_generate.wagtail.subprocess.run")
-def test_run_wagtail_start_stops_after_failed_uv_command(run: Mock) -> None:
+def test_run_wagtail_start_stops_after_failed_uv_command(
+    run: Mock,
+    resolve_python: Mock,
+) -> None:
     run.return_value = subprocess.CompletedProcess([], returncode=2)
 
     assert run_wagtail_start("example", project_root=Path("generated")) == 2
     run.assert_called_once_with(
         [
-            "uv",
+            "uvx",
+            "uv@latest",
             "init",
             "--bare",
             "--no-workspace",
             "--python",
-            "3.12",
+            "3.14",
             "--name",
             "example",
         ],
         cwd=Path("generated"),
         check=False,
     )
+    resolve_python.assert_called_once_with(Path("generated"))
 
 
+@patch(
+    "wagtail_generate.wagtail.latest_stable_python_version",
+    return_value="3.14",
+)
 @patch("wagtail_generate.wagtail.subprocess.run")
-def test_run_wagtail_start_defaults_to_sqlite_without_driver(run: Mock) -> None:
+def test_run_wagtail_start_defaults_to_sqlite_without_driver(
+    run: Mock,
+    resolve_python: Mock,
+) -> None:
     run.side_effect = [
         subprocess.CompletedProcess([], returncode=0),
         subprocess.CompletedProcess([], returncode=0),
@@ -205,8 +256,43 @@ def test_run_wagtail_start_defaults_to_sqlite_without_driver(run: Mock) -> None:
 
     assert run_wagtail_start("example", project_root=Path("generated")) == 1
     assert run.call_args_list[2] == (
-        (["uv", "add", "wagtail", "gunicorn"],),
+        (["uvx", "uv@latest", "add", "wagtail"],),
         {"cwd": Path("generated"), "check": False},
+    )
+    resolve_python.assert_called_once_with(Path("generated"))
+
+
+@patch("wagtail_generate.wagtail.subprocess.run")
+def test_latest_stable_python_version_uses_uv_download_catalog(run: Mock) -> None:
+    run.return_value = subprocess.CompletedProcess(
+        [],
+        returncode=0,
+        stdout=(
+            '[{"implementation":"cpython","variant":"default",'
+            '"version":"3.14.7"},'
+            '{"implementation":"cpython","variant":"default",'
+            '"version":"3.15.0b1"},'
+            '{"implementation":"pypy","variant":"default",'
+            '"version":"3.14.8"}]'
+        ),
+        stderr="",
+    )
+
+    assert latest_stable_python_version(Path("generated")) == "3.14"
+    run.assert_called_once_with(
+        [
+            "uvx",
+            "uv@latest",
+            "python",
+            "list",
+            "--only-downloads",
+            "--output-format",
+            "json",
+        ],
+        cwd=Path("generated"),
+        check=False,
+        capture_output=True,
+        text=True,
     )
 
 
