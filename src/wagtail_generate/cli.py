@@ -1,7 +1,10 @@
 """Command-line interface for wagtail-generate."""
 
 import argparse
+import keyword
+import re
 import sys
+import unicodedata
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
@@ -13,23 +16,73 @@ from wagtail_generate.safety import (
 from wagtail_generate.wagtail import run_wagtail_start
 
 
-def prompt_for_destination(
-    project_name: str,
-    base_directory: Path | None = None,
+def normalize_package_name(value: str) -> str:
+    """Convert a human-readable name into a conventional Python package name."""
+    ascii_value = (
+        unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode()
+    )
+    normalized = re.sub(r"[^a-zA-Z0-9]+", "_", ascii_value).strip("_").lower()
+    if not normalized:
+        raise ValueError("the name must contain at least one letter or number")
+    if normalized[0].isdigit():
+        normalized = f"site_{normalized}"
+    if keyword.iskeyword(normalized):
+        normalized = f"{normalized}_site"
+    return normalized
+
+
+def display_site_name(value: str) -> str:
+    """Return a readable site name without package-name separators."""
+    readable_name = " ".join(re.sub(r"[_-]+", " ", value).split())
+    return readable_name.title()
+
+
+def prompt_for_site_name(
+    default_name: str,
     input_fn: Callable[[str], str] | None = None,
-) -> Path:
-    """Ask whether the generated project should live in a subfolder."""
-    base_directory = base_directory or Path.cwd()
+) -> str:
+    """Ask for the human-facing Wagtail site name."""
+    read_input = input_fn or input
+    value = read_input(f"Site name [{default_name}]: ").strip()
+    return display_site_name(value or default_name)
+
+
+def normalize_subfolder(value: str) -> Path:
+    """Normalize each component of a relative Python package path."""
+    subfolder = Path(value)
+    if (
+        subfolder == Path(".")
+        or subfolder.is_absolute()
+        or ".." in subfolder.parts
+    ):
+        raise ValueError("the subfolder must stay inside the project root")
+    return Path(*(normalize_package_name(part) for part in subfolder.parts))
+
+
+def prompt_for_site_subfolder(
+    project_name: str,
+    input_fn: Callable[[str], str] | None = None,
+) -> Path | None:
+    """Ask whether Wagtail's generated code should live in a subfolder."""
     read_input = input_fn or input
 
     while True:
         use_subfolder = read_input("Generate the site in a subfolder? [y/N]: ")
         match use_subfolder.strip().lower():
             case "" | "n" | "no":
-                return base_directory
+                return None
             case "y" | "yes":
-                subfolder = read_input(f"Subfolder name [{project_name}]: ").strip()
-                return base_directory / (subfolder or project_name)
+                while True:
+                    value = read_input(f"Subfolder name [{project_name}]: ").strip()
+                    requested_name = value or project_name
+                    try:
+                        subfolder = normalize_subfolder(requested_name)
+                    except ValueError:
+                        print("Enter a relative subfolder inside the project root.")
+                        continue
+                    if str(subfolder) != requested_name:
+                        print(f"Using subfolder name: {subfolder}")
+                    return subfolder
             case _:
                 print("Please answer yes or no.")
 
@@ -57,9 +110,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     start_parser.add_argument("project_name", help="Name for the Wagtail project.")
     start_parser.add_argument(
+        "--site-name",
+        help="Human-facing Wagtail site name; prompted for when omitted.",
+    )
+    start_parser.add_argument(
         "--directory",
         type=Path,
-        help="Directory to initialize; defaults to the current directory.",
+        help="UV project root; defaults to the current directory.",
+    )
+    start_parser.add_argument(
+        "--site-directory",
+        type=Path,
+        default=argparse.SUPPRESS,
+        help=(
+            "Non-interactive Wagtail code directory relative to the project root; "
+            "use '.' for the root."
+        ),
     )
     start_parser.add_argument(
         "--template",
@@ -74,13 +140,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     arguments = parser.parse_args(argv)
     if arguments.command == "start":
-        destination = arguments.directory
-        if destination is None:
-            destination = prompt_for_destination(arguments.project_name)
+        try:
+            project_name = normalize_package_name(arguments.project_name)
+        except ValueError as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 2
+        if project_name != arguments.project_name:
+            print(f"Using Python project name: {project_name}")
+
+        project_root = arguments.directory or Path.cwd()
 
         checkout_root = source_checkout_root()
         if checkout_root is not None and destination_is_in_source_checkout(
-            destination,
+            project_root,
             checkout_root,
         ):
             print(
@@ -94,11 +166,58 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             return 2
 
-        destination.mkdir(parents=True, exist_ok=True)
+        if project_root.exists():
+            if not project_root.is_dir():
+                print(
+                    f"error: project root is not a directory: {project_root}",
+                    file=sys.stderr,
+                )
+                return 2
+            existing_entries = sorted(path.name for path in project_root.iterdir())
+            if existing_entries:
+                preview = ", ".join(existing_entries[:5])
+                if len(existing_entries) > 5:
+                    preview += f", and {len(existing_entries) - 5} more"
+                print(
+                    f"error: project root must be empty: {project_root}",
+                    file=sys.stderr,
+                )
+                print(f"Found: {preview}", file=sys.stderr)
+                return 2
+
+        default_site_name = display_site_name(arguments.project_name)
+        if arguments.site_name is None:
+            site_name = prompt_for_site_name(default_site_name)
+        else:
+            site_name = display_site_name(arguments.site_name)
+            if not site_name:
+                print("error: --site-name cannot be empty", file=sys.stderr)
+                return 2
+
+        if hasattr(arguments, "site_directory"):
+            site_subfolder = arguments.site_directory
+            if site_subfolder == Path("."):
+                site_subfolder = None
+            else:
+                try:
+                    site_subfolder = normalize_subfolder(str(site_subfolder))
+                except ValueError:
+                    print(
+                        "error: --site-directory must be a relative Python package "
+                        "path inside the project root",
+                        file=sys.stderr,
+                    )
+                    return 2
+        else:
+            site_subfolder = prompt_for_site_subfolder(project_name)
+
+        project_root.mkdir(parents=True, exist_ok=True)
 
         return run_wagtail_start(
-            project_name=arguments.project_name,
-            destination=destination,
+            project_name=project_name,
+            site_name=site_name,
+            project_root=project_root,
+            site_subfolder=site_subfolder,
             template=arguments.template,
         )
 
