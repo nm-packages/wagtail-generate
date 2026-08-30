@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "wagtail-generate"
+version = "0.1.0"
+description = "Generate opinionated Wagtail CMS projects from reusable codebase layouts."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [
+  { name = "Nick Moreton" },
+]
+dependencies = []
+
+[project.scripts]
+wagtail-generate = "wagtail_generate.cli:main"
+
+[dependency-groups]
+dev = [
+  "mypy>=1.17",
+  "pytest>=8.4",
+  "ruff>=0.12",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wagtail_generate"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["wagtail_generate"]
