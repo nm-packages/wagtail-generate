@@ -223,6 +223,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             site_subfolder = prompt_for_site_subfolder(project_name)
 
+        template = arguments.template
+        if template is not None:
+            template = template.resolve()
+            if not template.exists():
+                print(
+                    f"error: Wagtail project template does not exist: {template}",
+                    file=sys.stderr,
+                )
+                return 2
+
         project_root.mkdir(parents=True, exist_ok=True)
         if arguments.directory is None:
             action = "Using" if project_root_exists else "Created"
@@ -234,7 +244,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             database=database,
             project_root=project_root,
             site_subfolder=site_subfolder,
-            template=arguments.template,
+            template=template,
         )
 
     parser.print_help()

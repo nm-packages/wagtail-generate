@@ -189,6 +189,73 @@ def test_start_returns_wagtail_exit_code(run_start: Mock, tmp_path: Path) -> Non
     assert run_start.call_args.kwargs["database"] == "sqlite3"
 
 
+@patch("wagtail_generate.cli.run_wagtail_start", return_value=0)
+@patch("wagtail_generate.cli.source_checkout_root", return_value=None)
+def test_start_resolves_relative_template_from_invocation_directory(
+    find_checkout: Mock,
+    run_start: Mock,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    template = tmp_path / "templates" / "custom"
+    template.mkdir(parents=True)
+    destination = tmp_path / "generated" / "example"
+    monkeypatch.chdir(tmp_path)
+
+    result = main(
+        [
+            "start",
+            "example",
+            "--site-name",
+            "Example",
+            "--directory",
+            str(destination),
+            "--site-directory",
+            ".",
+            "--template",
+            "templates/custom",
+        ]
+    )
+
+    assert result == 0
+    assert run_start.call_args.kwargs["template"] == template
+    find_checkout.assert_called_once_with()
+
+
+@patch("wagtail_generate.cli.run_wagtail_start")
+@patch("wagtail_generate.cli.source_checkout_root", return_value=None)
+def test_start_refuses_missing_template_before_creating_project(
+    find_checkout: Mock,
+    run_start: Mock,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    destination = tmp_path / "generated" / "example"
+    monkeypatch.chdir(tmp_path)
+
+    result = main(
+        [
+            "start",
+            "example",
+            "--site-name",
+            "Example",
+            "--directory",
+            str(destination),
+            "--site-directory",
+            ".",
+            "--template",
+            "missing-template",
+        ]
+    )
+
+    assert result == 2
+    assert "Wagtail project template does not exist" in capsys.readouterr().err
+    assert not destination.exists()
+    run_start.assert_not_called()
+    find_checkout.assert_called_once_with()
+
+
 def test_site_code_defaults_to_project_root() -> None:
     subfolder = prompt_for_site_subfolder(
         "example",

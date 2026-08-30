@@ -155,6 +155,13 @@ uv run wagtail-generate start mysite \
 
 Use `--site-directory .` to generate the Wagtail code directly in the project root.
 
+Custom Wagtail project templates can be supplied as a file or directory. Relative
+template paths are resolved from the directory where `wagtail-generate` is run:
+
+```shell
+uv run wagtail-generate start mysite --template templates/custom
+```
+
 Without a site subfolder, the command runs the equivalent of:
 
 ```shell
