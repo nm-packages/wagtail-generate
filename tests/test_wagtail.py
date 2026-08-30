@@ -110,6 +110,7 @@ def test_run_wagtail_start_streams_native_command(
         in (project_root / "Dockerfile").read_text()
     )
     assert (project_root / ".pre-commit-config.yaml").is_file()
+    assert (project_root / "scripts" / "check_django_templates.py").is_file()
     assert "[tool.djangofmt]" in (project_root / "pyproject.toml").read_text()
     assert 'target-version = "py314"' in (project_root / "pyproject.toml").read_text()
     assert (project_root / ".env.example").is_file()

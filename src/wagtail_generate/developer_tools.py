@@ -85,6 +85,10 @@ def write_developer_tooling(
         project_directory / ".pre-commit-config.yaml",
         "static/pre-commit-config.yaml",
     )
+    write_template(
+        project_directory / "scripts" / "check_django_templates.py",
+        "static/check_django_templates.py",
+    )
     if database == "mysql":
         write_template(
             project_directory / "docker" / "mysql-init.sh",

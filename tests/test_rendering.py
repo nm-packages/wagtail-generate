@@ -15,6 +15,15 @@ def test_packaged_static_template_can_be_read() -> None:
     assert "Format Django templates" in content
 
 
+def test_generated_ignore_rules_only_exclude_root_output_directories() -> None:
+    content = template_text("static/gitignore")
+
+    assert "/media/" in content
+    assert "/static/" in content
+    assert "\nmedia/" not in content
+    assert "\nstatic/" not in content
+
+
 def test_rendering_requires_every_template_value() -> None:
     with pytest.raises(UndefinedError):
         render_template("env/postgresql.example.jinja", {})

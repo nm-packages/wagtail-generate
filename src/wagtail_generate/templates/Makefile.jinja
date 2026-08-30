@@ -1,6 +1,10 @@
 .DEFAULT_GOAL := help
 
 .PHONY: help sync{% if database != "sqlite3" %} database{% endif %} migrate dev docker stop superuser lint test check
+{% if database != "sqlite3" %}
+-include .env
+export
+{% endif %}
 
 help: ## Show the available commands
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -12,13 +16,13 @@ database: ## Start the local database container
 	docker compose up -d --wait db
 {% endif %}
 migrate: ## Apply Django database migrations
-	uv run python manage.py migrate
+	{% if database != "sqlite3" %}DATABASE_HOST=127.0.0.1 {% endif %}uv run python manage.py migrate
 
 dev: ## Run Wagtail locally
 {% if database != "sqlite3" %}	docker compose up -d --wait db
 {% endif %}	uv sync
-	uv run python manage.py migrate
-	uv run python manage.py runserver
+	{% if database != "sqlite3" %}DATABASE_HOST=127.0.0.1 {% endif %}uv run python manage.py migrate
+	{% if database != "sqlite3" %}DATABASE_HOST=127.0.0.1 {% endif %}uv run python manage.py runserver
 
 docker: ## Build and run the complete development environment
 	docker compose build --pull
@@ -28,14 +32,14 @@ stop: ## Stop the development containers
 	docker compose down
 
 superuser: ## Create a Wagtail administrator locally
-	uv run python manage.py createsuperuser
+	{% if database != "sqlite3" %}DATABASE_HOST=127.0.0.1 {% endif %}uv run python manage.py createsuperuser
 
 lint: ## Check Python and Django-template formatting
 	uv run ruff check .
 	uv run ruff format --check .
-	uv run djangofmt --check .
+	uv run python scripts/check_django_templates.py
 
 test: ## Run the Django test suite
-	uv run python manage.py test
+	{% if database != "sqlite3" %}DATABASE_HOST=127.0.0.1 {% endif %}uv run python manage.py test
 
 check: lint test ## Run all quality checks

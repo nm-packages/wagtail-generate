@@ -121,8 +121,11 @@ Run the generated checks with:
 ```shell
 uv run ruff check .
 uv run ruff format --check .
-uv run djangofmt .
+uv run python scripts/check_django_templates.py
 ```
+
+Format Django templates with `uv run djangofmt .` when the template check reports
+changes.
 
 The generated README includes the initial `git init`, `git add`, and pre-commit
 installation sequence. Pre-commit only considers files known to Git, including

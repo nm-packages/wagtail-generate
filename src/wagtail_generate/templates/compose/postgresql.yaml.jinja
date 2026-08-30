@@ -29,7 +29,7 @@ services:
       POSTGRES_USER: ${DATABASE_USER:-{{ project_name }}}
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-development}
     ports:
-      - "${DATABASE_FORWARD_PORT:-5432}:5432"
+      - "${DATABASE_PORT:-5432}:5432"
     volumes:
       - database-data:/var/lib/postgresql/data
     healthcheck:

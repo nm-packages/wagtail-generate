@@ -30,7 +30,7 @@ services:
       MYSQL_PASSWORD: ${DATABASE_PASSWORD:-development}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-development-root}
     ports:
-      - "${DATABASE_FORWARD_PORT:-3306}:3306"
+      - "${DATABASE_PORT:-3306}:3306"
     volumes:
       - database-data:/var/lib/mysql
       - ./docker/mysql-init.sh:/docker-entrypoint-initdb.d/10-django-test-database.sh:ro
