@@ -64,6 +64,112 @@ def test_start_runs_wagtail_command(run_start: Mock, tmp_path: Path) -> None:
     assert output.is_dir()
 
 
+@patch("wagtail_generate.cli.run_wagtail_start", return_value=0)
+@patch("wagtail_generate.cli.source_checkout_root", return_value=None)
+def test_start_creates_site_name_directory_by_default(
+    find_checkout: Mock,
+    run_start: Mock,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    result = main(
+        [
+            "start",
+            "cms_package",
+            "--site-name",
+            "Editorial Website",
+            "--database",
+            "postgresql",
+            "--site-directory",
+            ".",
+        ]
+    )
+
+    destination = tmp_path / "editorial_website"
+    assert result == 0
+    assert destination.is_dir()
+    assert f"Created project directory: {destination}" in capsys.readouterr().out
+    run_start.assert_called_once_with(
+        project_name="cms_package",
+        site_name="Editorial Website",
+        database="postgresql",
+        project_root=destination,
+        site_subfolder=None,
+        template=None,
+    )
+    find_checkout.assert_called_once_with()
+
+
+@patch("wagtail_generate.cli.run_wagtail_start", return_value=0)
+@patch("wagtail_generate.cli.source_checkout_root", return_value=None)
+def test_start_accepts_existing_empty_site_name_directory(
+    find_checkout: Mock,
+    run_start: Mock,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    destination = tmp_path / "example_site"
+    destination.mkdir()
+    monkeypatch.chdir(tmp_path)
+
+    result = main(
+        [
+            "start",
+            "example",
+            "--site-name",
+            "Example Site",
+            "--database",
+            "postgresql",
+            "--site-directory",
+            ".",
+        ]
+    )
+
+    assert result == 0
+    assert run_start.call_args.kwargs["project_root"] == destination
+    assert f"Using project directory: {destination}" in capsys.readouterr().out
+    find_checkout.assert_called_once_with()
+
+
+@patch("wagtail_generate.cli.run_wagtail_start")
+@patch("wagtail_generate.cli.source_checkout_root", return_value=None)
+def test_start_refuses_nonempty_site_name_directory(
+    find_checkout: Mock,
+    run_start: Mock,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    destination = tmp_path / "example_site"
+    destination.mkdir()
+    (destination / ".hidden-file").write_text("existing")
+    monkeypatch.chdir(tmp_path)
+
+    result = main(
+        [
+            "start",
+            "example",
+            "--site-name",
+            "Example Site",
+            "--database",
+            "postgresql",
+            "--site-directory",
+            ".",
+        ]
+    )
+
+    assert result == 2
+    error = capsys.readouterr().err
+    assert f"project root must be empty: {destination}" in error
+    assert ".hidden-file" in error
+    run_start.assert_not_called()
+    find_checkout.assert_called_once_with()
+
+
 @patch("wagtail_generate.cli.run_wagtail_start", return_value=1)
 def test_start_returns_wagtail_exit_code(run_start: Mock, tmp_path: Path) -> None:
     assert (

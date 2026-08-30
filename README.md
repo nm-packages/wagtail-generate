@@ -21,8 +21,8 @@ uv run wagtail-generate --help
 uv run wagtail-generate --version
 ```
 
-Initialize the current directory as a UV project, install the latest resolvable
-Wagtail release, and generate the site into it:
+Create a project folder in the current directory, initialize it as a UV project,
+install the latest resolvable Wagtail release, and generate the site into it:
 
 ```shell
 uv run wagtail-generate start mysite
@@ -40,8 +40,9 @@ Site name [This Is My Site]:
 ```
 
 It can also be supplied non-interactively with `--site-name`. This value populates
-`WAGTAIL_SITE_NAME` and the generated `AGENTS.md`; it does not affect folder or
-Python package names.
+`WAGTAIL_SITE_NAME` and the generated `AGENTS.md`. Unless `--directory` is supplied,
+it also determines the normalized project folder: `My Site` creates `./my_site`.
+It does not affect the Python package name.
 
 The local Docker database is also selected independently. PostgreSQL is the
 default, with MySQL available as an alternative:
@@ -63,7 +64,8 @@ The tool asks where to generate the site:
 Generate the site in a subfolder? [y/N]:
 ```
 
-Press Enter to use the current directory. Choosing yes asks for a subfolder name;
+Press Enter to put the Wagtail code directly in the newly created project root.
+Choosing yes asks for a source subfolder name;
 press Enter again to use `mysite` as that name. The UV project, virtual environment,
 and lockfile always remain in the project root. Only Wagtail's generated code is
 placed in the optional subfolder, except for these project-root files:
@@ -112,7 +114,7 @@ flattens that package by one level (`src/settings/`) and updates the generated
 settings, URL, WSGI, `home`, and `search` module paths accordingly. This keeps the
 root-level `manage.py` imports valid.
 
-Select a different UV project root with `--directory`:
+Override the automatically created site-name project folder with `--directory`:
 
 ```shell
 uv run wagtail-generate start mysite --directory path/to/destination
@@ -147,9 +149,10 @@ When running the tool from this repository, generation into the repository root
 or any directory below it is refused. This prevents generated sites from being
 written over the tool's own source tree.
 
-The selected project root must not contain any files or directories, including
-hidden entries. A missing directory is created automatically; an existing empty
-directory is accepted.
+The destination project folder must not contain any files or directories,
+including hidden entries. A missing folder is created automatically; an existing
+empty folder is accepted. Files elsewhere in the current directory do not prevent
+generation because they are outside the new project folder.
 
 Run the checks:
 

@@ -136,7 +136,9 @@ def build_parser() -> argparse.ArgumentParser:
     start_parser.add_argument(
         "--directory",
         type=Path,
-        help="UV project root; defaults to the current directory.",
+        help=(
+            "UV project root; defaults to a site-name folder in the current directory."
+        ),
     )
     start_parser.add_argument(
         "--site-directory",
@@ -168,7 +170,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         if project_name != arguments.project_name:
             print(f"Using Python project name: {project_name}")
 
-        project_root = arguments.directory or Path.cwd()
+        default_site_name = display_site_name(arguments.project_name)
+        if arguments.site_name is None:
+            site_name = prompt_for_site_name(default_site_name)
+        else:
+            site_name = display_site_name(arguments.site_name)
+            if not site_name:
+                print("error: --site-name cannot be empty", file=sys.stderr)
+                return 2
+
+        project_root = arguments.directory or (
+            Path.cwd() / normalize_package_name(site_name)
+        )
+        project_root_exists = project_root.exists()
 
         checkout_root = source_checkout_root()
         if checkout_root is not None and destination_is_in_source_checkout(
@@ -205,15 +219,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(f"Found: {preview}", file=sys.stderr)
                 return 2
 
-        default_site_name = display_site_name(arguments.project_name)
-        if arguments.site_name is None:
-            site_name = prompt_for_site_name(default_site_name)
-        else:
-            site_name = display_site_name(arguments.site_name)
-            if not site_name:
-                print("error: --site-name cannot be empty", file=sys.stderr)
-                return 2
-
         database: Database = arguments.database or prompt_for_database()
 
         if hasattr(arguments, "site_directory"):
@@ -234,6 +239,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             site_subfolder = prompt_for_site_subfolder(project_name)
 
         project_root.mkdir(parents=True, exist_ok=True)
+        if arguments.directory is None:
+            action = "Using" if project_root_exists else "Created"
+            print(f"{action} project directory: {project_root}", flush=True)
 
         return run_wagtail_start(
             project_name=project_name,
