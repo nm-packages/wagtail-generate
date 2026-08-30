@@ -1,0 +1,41 @@
+# Project guidance
+
+## Project
+
+This is the Wagtail CMS project for **{{ site_name }}**. It was generated from
+{{ template_description }}.
+
+- Python project package: `{{ project_name }}`
+- Site source directory: `{{ source_directory }}`
+- Django settings package: `{{ settings_module }}`
+- Local Docker database: `{{ database }}`
+- Dependency manager: UV
+
+## Commands
+
+Run commands from the project root:
+
+```shell
+uv sync
+uv run ruff check .
+uv run ruff format --check .
+uv run djangofmt .
+docker compose up --build
+docker compose run --rm web python manage.py check
+docker compose run --rm web python manage.py test
+```
+
+Use `uv add` and `uv remove` to manage dependencies. Do not create or maintain a
+`requirements.txt`; `pyproject.toml` and `uv.lock` are authoritative.
+
+## Development guidance
+
+- Keep settings in `{{ settings_module }}` and preserve the existing environment split.
+- Create and commit Django migrations whenever models change.
+- Add tests for model, view, template, and page-behavior changes.
+- Run the Django system check and relevant tests in Compose before finishing work.
+- After cloning, run `uv run pre-commit install`. Pre-commit only checks files known
+  to Git, so stage new files before expecting `--all-files` to include them.
+- Use `docker compose down` to stop local services and `docker compose down --volumes`
+  when the local {{ database }} data should also be reset.
+- Keep secrets out of version control and load deployment values from the environment.

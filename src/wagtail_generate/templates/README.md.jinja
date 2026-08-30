@@ -1,0 +1,82 @@
+# {{ site_name }}
+
+Wagtail CMS project generated with `wagtail-generate`.
+
+- Python package: `{{ project_name }}`
+- Site source: `{{ source_directory }}`
+- Django settings: `{{ settings_module }}`
+- Local database: {{ database_name }}
+- Python: {{ python_version }}
+
+## Requirements
+
+- [UV](https://docs.astral.sh/uv/)
+- Docker with Compose support
+
+## Docker setup
+
+Copy the example environment file if you want to change credentials or forwarded
+ports, then start the complete development environment:
+
+```shell
+cp .env.example .env
+docker compose up --build
+```
+
+Compose waits for {{ database_name }}, applies migrations, and serves Wagtail at
+<http://localhost:8000>. Create an administrator in another terminal:
+
+```shell
+docker compose exec web python manage.py createsuperuser
+```
+
+Stop the services with `docker compose down`. Add `--volumes` to also delete the
+local database data.
+{% if database == "mysql" %}
+
+> [!NOTE]
+> Django warns that MySQL cannot enforce Wagtail's conditional `WorkflowState`
+> uniqueness constraint. This is a database limitation rather than a setup error.
+{% endif %}
+
+## Local UV setup
+
+Start only the database in Docker, install the locked dependencies, migrate, and
+run Django locally:
+
+```shell
+docker compose up -d db
+uv sync
+uv run python manage.py migrate
+uv run python manage.py runserver
+```
+
+The settings default to the database exposed on `127.0.0.1`. Override
+`DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_HOST`, and
+`DATABASE_PORT` when needed.
+
+## Quality checks
+
+```shell
+uv run ruff check .
+uv run ruff format --check .
+uv run djangofmt .
+uv run python manage.py test
+```
+
+Initialize version control and install the hooks after generation. Pre-commit's
+`--all-files` option means all files known to Git, so the initial `git add` is
+required:
+
+```shell
+git init
+git add --all
+uv run pre-commit install
+uv run pre-commit run --all-files
+```
+
+If a formatter changes files during that first run, inspect the changes and run
+`git add --all` again before committing.
+
+Use `uv add` and `uv remove` for dependencies. `pyproject.toml` and `uv.lock` are
+authoritative; this project intentionally does not use `requirements.txt`.

@@ -164,3 +164,13 @@ Install it as a local UV tool while developing:
 ```shell
 uv tool install --editable .
 ```
+
+## Generated file templates
+
+Generated file content lives under `src/wagtail_generate/templates/`. Files ending
+in `.jinja` are rendered with project values; files under `templates/static/` are
+copied unchanged. The renderer uses strict undefined values, so missing template
+context fails immediately rather than leaving an incomplete generated file.
+
+Templates are loaded with `importlib.resources` and explicitly included in the
+built wheel, keeping the same behavior when the command runs through `uvx`.

@@ -1,0 +1,49 @@
+services:
+  web:
+    build:
+      context: .
+      target: development
+    init: true
+    command: >-
+      sh -c "uv run python manage.py migrate &&
+      uv run python manage.py runserver 0.0.0.0:8000"
+    environment:
+      DATABASE_NAME: ${DATABASE_NAME:-{{ project_name }}}
+      DATABASE_USER: ${DATABASE_USER:-{{ project_name }}}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-development}
+      DATABASE_HOST: db
+      DATABASE_PORT: 3306
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+    volumes:
+      - .:/app
+      - web-venv:/app/.venv
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ${DATABASE_NAME:-{{ project_name }}}
+      MYSQL_USER: ${DATABASE_USER:-{{ project_name }}}
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD:-development}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-development-root}
+    ports:
+      - "${DATABASE_FORWARD_PORT:-3306}:3306"
+    volumes:
+      - database-data:/var/lib/mysql
+      - ./docker/mysql-init.sh:/docker-entrypoint-initdb.d/10-django-test-database.sh:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          mysqladmin ping -h localhost -uroot
+          -p$${MYSQL_ROOT_PASSWORD} --silent
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  database-data:
+  web-venv:

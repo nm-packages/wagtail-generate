@@ -1,0 +1,11 @@
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.mysql",
+        "NAME": os.environ.get("DATABASE_NAME", "{{ project_name }}"),
+        "USER": os.environ.get("DATABASE_USER", "{{ project_name }}"),
+        "PASSWORD": os.environ.get("DATABASE_PASSWORD", "development"),
+        "HOST": os.environ.get("DATABASE_HOST", "127.0.0.1"),
+        "PORT": os.environ.get("DATABASE_PORT", "3306"),
+        "OPTIONS": {"charset": "utf8mb4"},
+    }
+}

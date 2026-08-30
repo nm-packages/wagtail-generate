@@ -31,6 +31,8 @@ creates opinionated Wagtail CMS projects from named codebase layouts.
   Django, Git, or frontend commands.
 - Keep generated Docker, Compose, database settings, formatter configuration, and
   `AGENTS.md` guidance consistent with the selected database and source layout.
+- Keep generated file content in `src/wagtail_generate/templates/`; Python should
+  orchestrate resource loading and rendering rather than embed large file strings.
 
 ## Quality checks
 

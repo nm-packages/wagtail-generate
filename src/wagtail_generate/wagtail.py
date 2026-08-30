@@ -12,6 +12,7 @@ from wagtail_generate.developer_tools import (
     database_driver,
     write_developer_tooling,
 )
+from wagtail_generate.rendering import write_template
 
 ROOT_FILES = (".dockerignore", "Dockerfile", "manage.py")
 
@@ -205,49 +206,17 @@ def _write_agents_file(
         if template is not None
         else "the default Wagtail template"
     )
-    agents_file.write_text(
-        f"""# Project guidance
-
-## Project
-
-This is the Wagtail CMS project for **{site_name}**. It was generated from
-{template_description}.
-
-- Python project package: `{project_name}`
-- Site source directory: `{source_directory}`
-- Django settings package: `{settings_module}`
-- Local Docker database: `{database}`
-- Dependency manager: UV
-
-## Commands
-
-Run commands from the project root:
-
-```shell
-uv sync
-uv run ruff check .
-uv run ruff format --check .
-uv run djangofmt .
-docker compose up --build
-docker compose run --rm web python manage.py check
-docker compose run --rm web python manage.py test
-```
-
-Use `uv add` and `uv remove` to manage dependencies. Do not create or maintain a
-`requirements.txt`; `pyproject.toml` and `uv.lock` are authoritative.
-
-## Development guidance
-
-- Keep settings in `{settings_module}` and preserve the existing environment split.
-- Create and commit Django migrations whenever models change.
-- Add tests for model, view, template, and page-behavior changes.
-- Run the Django system check and relevant tests in Compose before finishing work.
-- After cloning, run `uv run pre-commit install`. Pre-commit only checks files known
-  to Git, so stage new files before expecting `--all-files` to include them.
-- Use `docker compose down` to stop local services and `docker compose down --volumes`
-  when the local {database} data should also be reset.
-- Keep secrets out of version control and load deployment values from the environment.
-"""
+    write_template(
+        agents_file,
+        "AGENTS.md.jinja",
+        {
+            "site_name": site_name,
+            "template_description": template_description,
+            "project_name": project_name,
+            "source_directory": source_directory,
+            "settings_module": settings_module,
+            "database": database,
+        },
     )
 
 
@@ -265,95 +234,18 @@ def _write_readme_file(
         if site_subfolder is None
         else f"{'.'.join(site_subfolder.parts)}.settings"
     )
-    database_name = "PostgreSQL" if database == "postgresql" else "MySQL"
-    mysql_note = ""
-    if database == "mysql":
-        mysql_note = """
-
-> [!NOTE]
-> Django warns that MySQL cannot enforce Wagtail's conditional `WorkflowState`
-> uniqueness constraint. This is a database limitation rather than a setup error.
-"""
-
-    (project_directory / "README.md").write_text(
-        f"""# {site_name}
-
-Wagtail CMS project generated with `wagtail-generate`.
-
-- Python package: `{project_name}`
-- Site source: `{source_directory}`
-- Django settings: `{settings_module}`
-- Local database: {database_name}
-- Python: {TARGET_PYTHON_VERSION}
-
-## Requirements
-
-- [UV](https://docs.astral.sh/uv/)
-- Docker with Compose support
-
-## Docker setup
-
-Copy the example environment file if you want to change credentials or forwarded
-ports, then start the complete development environment:
-
-```shell
-cp .env.example .env
-docker compose up --build
-```
-
-Compose waits for {database_name}, applies migrations, and serves Wagtail at
-<http://localhost:8000>. Create an administrator in another terminal:
-
-```shell
-docker compose exec web python manage.py createsuperuser
-```
-
-Stop the services with `docker compose down`. Add `--volumes` to also delete the
-local database data.
-{mysql_note}
-
-## Local UV setup
-
-Start only the database in Docker, install the locked dependencies, migrate, and
-run Django locally:
-
-```shell
-docker compose up -d db
-uv sync
-uv run python manage.py migrate
-uv run python manage.py runserver
-```
-
-The settings default to the database exposed on `127.0.0.1`. Override
-`DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_HOST`, and
-`DATABASE_PORT` when needed.
-
-## Quality checks
-
-```shell
-uv run ruff check .
-uv run ruff format --check .
-uv run djangofmt .
-uv run python manage.py test
-```
-
-Initialize version control and install the hooks after generation. Pre-commit's
-`--all-files` option means all files known to Git, so the initial `git add` is
-required:
-
-```shell
-git init
-git add --all
-uv run pre-commit install
-uv run pre-commit run --all-files
-```
-
-If a formatter changes files during that first run, inspect the changes and run
-`git add --all` again before committing.
-
-Use `uv add` and `uv remove` for dependencies. `pyproject.toml` and `uv.lock` are
-authoritative; this project intentionally does not use `requirements.txt`.
-"""
+    write_template(
+        project_directory / "README.md",
+        "README.md.jinja",
+        {
+            "site_name": site_name,
+            "project_name": project_name,
+            "source_directory": source_directory,
+            "settings_module": settings_module,
+            "database": database,
+            "database_name": ("PostgreSQL" if database == "postgresql" else "MySQL"),
+            "python_version": TARGET_PYTHON_VERSION,
+        },
     )
 
 
