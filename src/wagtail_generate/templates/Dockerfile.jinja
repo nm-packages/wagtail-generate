@@ -10,7 +10,7 @@ WORKDIR /app
 
 RUN apt-get update --yes --quiet \
     && apt-get install --yes --quiet --no-install-recommends \
-        build-essential {{ build_database_packages }} \
+        build-essential{% if build_database_packages %} {{ build_database_packages }}{% endif %} \
         libjpeg62-turbo-dev zlib1g-dev libwebp-dev \
     && rm -rf /var/lib/apt/lists/*
 
@@ -35,7 +35,7 @@ FROM python:{{ python_version }}-slim-bookworm AS runtime
 
 RUN apt-get update --yes --quiet \
     && apt-get install --yes --quiet --no-install-recommends \
-        {{ runtime_database_packages }} libjpeg62-turbo libwebp7 \
+        {% if runtime_database_packages %}{{ runtime_database_packages }} {% endif %}libjpeg62-turbo libwebp7 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home wagtail
 

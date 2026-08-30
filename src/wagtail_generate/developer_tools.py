@@ -11,7 +11,7 @@ TARGET_PYTHON_VERSION = "3.12"
 def configure_database(settings_file: Path, database: str, project_name: str) -> None:
     """Replace Wagtail's SQLite settings with a rendered database configuration."""
     content = settings_file.read_text()
-    if "import os\n" not in content:
+    if database != "sqlite3" and "import os\n" not in content:
         content = content.replace(
             "from pathlib import Path\n",
             "import os\n\nfrom pathlib import Path\n",
@@ -55,12 +55,18 @@ def write_developer_tooling(
             "libpq-dev"
             if database == "postgresql"
             else "default-libmysqlclient-dev pkg-config"
+            if database == "mysql"
+            else ""
         ),
         "runtime_database_packages": (
-            "libpq5" if database == "postgresql" else "libmariadb3"
+            "libpq5"
+            if database == "postgresql"
+            else "libmariadb3"
+            if database == "mysql"
+            else ""
         ),
     }
-    project_context = {"project_name": project_name}
+    project_context = {"project_name": project_name, "database": database}
 
     write_template(
         project_directory / "Dockerfile",
@@ -80,6 +86,11 @@ def write_developer_tooling(
     write_template(project_directory / ".gitignore", "static/gitignore")
     write_template(project_directory / ".dockerignore", "static/dockerignore")
     write_template(
+        project_directory / "Makefile",
+        "Makefile.jinja",
+        project_context,
+    )
+    write_template(
         project_directory / ".pre-commit-config.yaml",
         "static/pre-commit-config.yaml",
     )
@@ -93,9 +104,13 @@ def write_developer_tooling(
     _append_tool_configuration(project_directory / "pyproject.toml")
 
 
-def database_driver(database: str) -> str:
+def database_driver(database: str) -> str | None:
     """Return the Python driver dependency for a selected database."""
-    return "psycopg[binary]" if database == "postgresql" else "mysqlclient"
+    if database == "postgresql":
+        return "psycopg[binary]"
+    if database == "mysql":
+        return "mysqlclient"
+    return None
 
 
 def _append_tool_configuration(pyproject: Path) -> None:

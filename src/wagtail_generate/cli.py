@@ -16,7 +16,7 @@ from wagtail_generate.safety import (
 )
 from wagtail_generate.wagtail import run_wagtail_start
 
-Database = Literal["postgresql", "mysql"]
+Database = Literal["sqlite3", "postgresql", "mysql"]
 
 
 def normalize_package_name(value: str) -> str:
@@ -48,22 +48,6 @@ def prompt_for_site_name(
     read_input = input_fn or input
     value = read_input(f"Site name [{default_name}]: ").strip()
     return display_site_name(value or default_name)
-
-
-def prompt_for_database(
-    input_fn: Callable[[str], str] | None = None,
-) -> Database:
-    """Ask which database to configure for local Docker development."""
-    read_input = input_fn or input
-    while True:
-        value = read_input("Local Docker database [PostgreSQL/mysql]: ").strip()
-        match value.lower():
-            case "" | "postgres" | "postgresql" | "p":
-                return "postgresql"
-            case "mysql" | "m":
-                return "mysql"
-            case _:
-                print("Choose PostgreSQL or MySQL.")
 
 
 def normalize_subfolder(value: str) -> Path:
@@ -130,8 +114,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     start_parser.add_argument(
         "--database",
-        choices=("postgresql", "mysql"),
-        help="Local Docker database; prompted for when omitted.",
+        choices=("sqlite3", "postgresql", "mysql"),
+        default="sqlite3",
+        help="Database backend; defaults to sqlite3.",
     )
     start_parser.add_argument(
         "--directory",
@@ -219,7 +204,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(f"Found: {preview}", file=sys.stderr)
                 return 2
 
-        database: Database = arguments.database or prompt_for_database()
+        database: Database = arguments.database
 
         if hasattr(arguments, "site_directory"):
             site_subfolder = arguments.site_directory

@@ -49,6 +49,11 @@ def test_mysql_settings_and_tooling_are_consistent(tmp_path: Path) -> None:
     dockerfile = (tmp_path / "Dockerfile").read_text()
     assert "default-libmysqlclient-dev" in dockerfile
     assert "RUN chown wagtail:wagtail /app" in dockerfile
+    makefile = (tmp_path / "Makefile").read_text()
+    assert "dev: ## Run Wagtail locally" in makefile
+    assert "docker compose up -d --wait db" in makefile
+    assert "uv run python manage.py runserver" in makefile
+    assert "check: lint test" in makefile
     assert "MYSQL_ROOT_PASSWORD" in (tmp_path / ".env.example").read_text()
     compose = (tmp_path / "compose.yaml").read_text()
     assert "docker/mysql-init.sh" in compose
@@ -68,3 +73,38 @@ def test_postgresql_adds_required_django_app(tmp_path: Path) -> None:
     assert '"django.contrib.postgres"' in content
     assert database_driver("postgresql") == "psycopg[binary]"
     assert not (tmp_path / "docker" / "mysql-init.sh").exists()
+
+
+def test_sqlite_needs_no_server_or_database_driver(tmp_path: Path) -> None:
+    settings = tmp_path / "base.py"
+    settings.write_text(generated_settings())
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "example"\nversion = "0.1.0"\n'
+    )
+
+    configure_database(settings, "sqlite3", "example")
+    write_developer_tooling(
+        project_directory=tmp_path,
+        project_name="example",
+        settings_module="example.settings",
+        database="sqlite3",
+    )
+
+    content = settings.read_text()
+    assert '"ENGINE": "django.db.backends.sqlite3"' in content
+    assert '"NAME": BASE_DIR / "db.sqlite3"' in content
+    assert "import os" not in content
+    assert database_driver("sqlite3") is None
+
+    compose = (tmp_path / "compose.yaml").read_text()
+    assert "  db:" not in compose
+    assert "DATABASE_HOST" not in compose
+    makefile = (tmp_path / "Makefile").read_text()
+    assert "dev: ## Run Wagtail locally" in makefile
+    assert "docker compose up -d --wait db" not in makefile
+    assert "uv run python manage.py runserver" in makefile
+    assert (tmp_path / ".env.example").read_text() == "WEB_PORT=8000\n"
+    dockerfile = (tmp_path / "Dockerfile").read_text()
+    assert "libpq" not in dockerfile
+    assert "libmariadb" not in dockerfile
+    assert "default-libmysqlclient" not in dockerfile

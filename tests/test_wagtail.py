@@ -81,8 +81,10 @@ def test_run_wagtail_start_streams_native_command(
     assert readme.startswith("# Example website")
     assert "Site source: `site`" in readme
     assert "Django settings: `site.settings`" in readme
-    assert "Local database: PostgreSQL" in readme
-    assert "docker compose up --build" in readme
+    assert "Database: PostgreSQL" in readme
+    assert "make dev" in readme
+    assert "make docker" in readme
+    assert "make check" in readme
     assert "git init" in readme
     assert "git add --all" in readme
     assert "uv run pre-commit install" in readme
@@ -91,9 +93,10 @@ def test_run_wagtail_start_streams_native_command(
     assert "Python project package: `example`" in agents
     assert "Site source directory: `site`" in agents
     assert "Django settings package: `site.settings`" in agents
-    assert "Local Docker database: `postgresql`" in agents
+    assert "Database: `postgresql`" in agents
     assert "custom template `custom-template`" in agents
     assert "postgres:17-bookworm" in (project_root / "compose.yaml").read_text()
+    assert (project_root / "Makefile").is_file()
     assert "uv sync --locked" in (project_root / "Dockerfile").read_text()
     assert (project_root / ".pre-commit-config.yaml").is_file()
     assert "[tool.djangofmt]" in (project_root / "pyproject.toml").read_text()
@@ -189,6 +192,21 @@ def test_run_wagtail_start_stops_after_failed_uv_command(run: Mock) -> None:
         ],
         cwd=Path("generated"),
         check=False,
+    )
+
+
+@patch("wagtail_generate.wagtail.subprocess.run")
+def test_run_wagtail_start_defaults_to_sqlite_without_driver(run: Mock) -> None:
+    run.side_effect = [
+        subprocess.CompletedProcess([], returncode=0),
+        subprocess.CompletedProcess([], returncode=0),
+        subprocess.CompletedProcess([], returncode=1),
+    ]
+
+    assert run_wagtail_start("example", project_root=Path("generated")) == 1
+    assert run.call_args_list[2] == (
+        (["uv", "add", "wagtail", "gunicorn"],),
+        {"cwd": Path("generated"), "check": False},
     )
 
 

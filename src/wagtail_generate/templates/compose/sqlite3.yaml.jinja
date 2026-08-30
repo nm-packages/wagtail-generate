@@ -1,0 +1,17 @@
+services:
+  web:
+    build:
+      context: .
+      target: development
+    init: true
+    command: >-
+      sh -c "uv run python manage.py migrate &&
+      uv run python manage.py runserver 0.0.0.0:8000"
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+    volumes:
+      - .:/app
+      - web-venv:/app/.venv
+
+volumes:
+  web-venv:

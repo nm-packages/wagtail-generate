@@ -3,8 +3,9 @@
 `wagtail-generate` is a UV-installable command-line tool for creating Wagtail CMS
 projects with a chosen, repeatable codebase layout.
 
-Generated projects are ready for local UV or Docker development, with a selectable
-PostgreSQL or MySQL database and a consistent formatting and pre-commit setup.
+Generated projects are ready for local UV or Docker development, using SQLite by
+default with PostgreSQL and MySQL available, plus a consistent formatting and
+pre-commit setup.
 
 ## Development
 
@@ -44,15 +45,14 @@ It can also be supplied non-interactively with `--site-name`. This value populat
 it also determines the normalized project folder: `My Site` creates `./my_site`.
 It does not affect the Python package name.
 
-The local Docker database is also selected independently. PostgreSQL is the
-default, with MySQL available as an alternative:
+SQLite is used by default, so a generated site can run locally without a separate
+database server. Select PostgreSQL or MySQL explicitly when the project needs a
+server database:
 
-```text
-Local Docker database [PostgreSQL/mysql]:
+```shell
+uv run wagtail-generate start mysite --database postgresql
+uv run wagtail-generate start mysite --database mysql
 ```
-
-For non-interactive generation, use `--database postgresql` or
-`--database mysql`.
 
 PostgreSQL is recommended for full Django feature support. MySQL works for local
 development, but Django reports that MySQL cannot enforce Wagtail's conditional
@@ -85,16 +85,26 @@ site name, Python package, source directory, settings module, template choice, U
 commands, and development guidance for the generated layout.
 
 Generated projects include a UV-native multi-stage `Dockerfile`, `compose.yaml`,
-database health checks and persistent storage, `.env.example`, Ruff, djangofmt,
-and pre-commit configuration. Start local development with:
+`.env.example`, Ruff, djangofmt, pre-commit configuration, and a Makefile.
+PostgreSQL and MySQL projects also include database health checks and persistent
+storage. Install the locked dependencies, apply migrations, and run Wagtail
+locally with:
 
 ```shell
-docker compose up --build
+make dev
 ```
 
-Copy `.env.example` to `.env` to customize credentials or the forwarded web and
-database ports. Compose waits for the database health check, applies migrations,
-and then starts Wagtail on `http://localhost:8000` by default.
+Run `make help` to list the other development commands. To build and run the
+complete environment in Docker instead, use:
+
+```shell
+make docker
+```
+
+Copy `.env.example` to `.env` to customize the forwarded web port and, for a
+server database, its credentials and forwarded port. Compose applies migrations
+and then starts Wagtail on `http://localhost:8000` by default; PostgreSQL and
+MySQL projects first wait for their database health check.
 
 Run the generated checks with:
 
@@ -137,13 +147,13 @@ Without a site subfolder, the command runs the equivalent of:
 ```shell
 uv init --bare --no-workspace
 uv python pin 3.12
-uv add wagtail gunicorn psycopg[binary]
+uv add wagtail gunicorn
 uv add --dev ruff djangofmt pre-commit
 uv run wagtail start mysite .
 ```
 
-The database driver is `psycopg[binary]` for PostgreSQL or `mysqlclient` for
-MySQL.
+SQLite needs no additional database driver. The driver is `psycopg[binary]` for
+PostgreSQL or `mysqlclient` for MySQL.
 
 When running the tool from this repository, generation into the repository root
 or any directory below it is refused. This prevents generated sites from being

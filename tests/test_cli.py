@@ -10,7 +10,6 @@ from wagtail_generate.cli import (
     display_site_name,
     main,
     normalize_package_name,
-    prompt_for_database,
     prompt_for_site_name,
     prompt_for_site_subfolder,
 )
@@ -179,8 +178,6 @@ def test_start_returns_wagtail_exit_code(run_start: Mock, tmp_path: Path) -> Non
                 "example",
                 "--site-name",
                 "Example",
-                "--database",
-                "postgresql",
                 "--directory",
                 str(tmp_path),
                 "--site-directory",
@@ -189,6 +186,7 @@ def test_start_returns_wagtail_exit_code(run_start: Mock, tmp_path: Path) -> Non
         )
         == 1
     )
+    assert run_start.call_args.kwargs["database"] == "sqlite3"
 
 
 def test_site_code_defaults_to_project_root() -> None:
@@ -243,14 +241,6 @@ def test_site_name_prompt_accepts_default() -> None:
     assert prompt_for_site_name("Example Site", input_fn=lambda _: "") == (
         "Example Site"
     )
-
-
-def test_database_prompt_defaults_to_postgresql() -> None:
-    assert prompt_for_database(input_fn=lambda _: "") == "postgresql"
-
-
-def test_database_prompt_accepts_mysql() -> None:
-    assert prompt_for_database(input_fn=lambda _: "mysql") == "mysql"
 
 
 def test_subfolder_with_spaces_is_normalized(

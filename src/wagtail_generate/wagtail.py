@@ -20,7 +20,7 @@ ROOT_FILES = (".dockerignore", "Dockerfile", "manage.py")
 def run_wagtail_start(
     project_name: str,
     site_name: str | None = None,
-    database: str = "postgresql",
+    database: str = "sqlite3",
     project_root: Path | None = None,
     site_subfolder: Path | None = None,
     template: Path | None = None,
@@ -42,6 +42,11 @@ def run_wagtail_start(
             )
             return 2
 
+    runtime_dependencies = ["wagtail", "gunicorn"]
+    driver = database_driver(database)
+    if driver is not None:
+        runtime_dependencies.append(driver)
+
     commands = [
         [
             "uv",
@@ -54,7 +59,7 @@ def run_wagtail_start(
             project_name,
         ],
         ["uv", "python", "pin", TARGET_PYTHON_VERSION],
-        ["uv", "add", "wagtail", "gunicorn", database_driver(database)],
+        ["uv", "add", *runtime_dependencies],
         ["uv", "add", "--dev", "ruff", "djangofmt", "pre-commit"],
     ]
     for command in commands:
@@ -243,7 +248,11 @@ def _write_readme_file(
             "source_directory": source_directory,
             "settings_module": settings_module,
             "database": database,
-            "database_name": ("PostgreSQL" if database == "postgresql" else "MySQL"),
+            "database_name": {
+                "sqlite3": "SQLite",
+                "postgresql": "PostgreSQL",
+                "mysql": "MySQL",
+            }[database],
             "python_version": TARGET_PYTHON_VERSION,
         },
     )

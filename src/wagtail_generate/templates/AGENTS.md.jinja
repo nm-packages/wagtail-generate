@@ -8,7 +8,7 @@ This is the Wagtail CMS project for **{{ site_name }}**. It was generated from
 - Python project package: `{{ project_name }}`
 - Site source directory: `{{ source_directory }}`
 - Django settings package: `{{ settings_module }}`
-- Local Docker database: `{{ database }}`
+- Database: `{{ database }}`
 - Dependency manager: UV
 
 ## Commands
@@ -16,11 +16,9 @@ This is the Wagtail CMS project for **{{ site_name }}**. It was generated from
 Run commands from the project root:
 
 ```shell
-uv sync
-uv run ruff check .
-uv run ruff format --check .
-uv run djangofmt .
-docker compose up --build
+make dev
+make check
+make docker
 docker compose run --rm web python manage.py check
 docker compose run --rm web python manage.py test
 ```
@@ -36,6 +34,8 @@ Use `uv add` and `uv remove` to manage dependencies. Do not create or maintain a
 - Run the Django system check and relevant tests in Compose before finishing work.
 - After cloning, run `uv run pre-commit install`. Pre-commit only checks files known
   to Git, so stage new files before expecting `--all-files` to include them.
-- Use `docker compose down` to stop local services and `docker compose down --volumes`
+{% if database == "sqlite3" %}- The local SQLite database is `db.sqlite3`; do not commit it.
+{% else %}- Use `docker compose down` to stop local services and `docker compose down --volumes`
   when the local {{ database }} data should also be reset.
+{% endif %}
 - Keep secrets out of version control and load deployment values from the environment.

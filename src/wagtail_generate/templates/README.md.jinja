@@ -5,33 +5,53 @@ Wagtail CMS project generated with `wagtail-generate`.
 - Python package: `{{ project_name }}`
 - Site source: `{{ source_directory }}`
 - Django settings: `{{ settings_module }}`
-- Local database: {{ database_name }}
+- Database: {{ database_name }}
 - Python: {{ python_version }}
 
 ## Requirements
 
 - [UV](https://docs.astral.sh/uv/)
-- Docker with Compose support
+- Make
+- Docker with Compose support{% if database == "sqlite3" %} (optional for Docker development){% endif %}
+
+## Quick start
+
+{% if database == "sqlite3" %}Install dependencies, apply migrations, and run Wagtail locally:
+{% else %}Start the database container, install dependencies, apply migrations, and run
+Wagtail locally:
+{% endif %}
+
+```shell
+make dev
+```
+
+The site is available at <http://localhost:8000>. Stop the local server with
+Ctrl-C.{% if database != "sqlite3" %} Run `make stop` when you also want to stop
+the database container.{% endif %} Run `make help` to see all available
+development commands.
 
 ## Docker setup
 
-Copy the example environment file if you want to change credentials or forwarded
-ports, then start the complete development environment:
+{% if database == "sqlite3" %}Copy the example environment file to change the forwarded web port, then start
+the complete development environment:
+{% else %}Copy the example environment file to change credentials or forwarded ports, then
+start the complete development environment:
+{% endif %}
 
 ```shell
 cp .env.example .env
-docker compose up --build
+make docker
 ```
 
-Compose waits for {{ database_name }}, applies migrations, and serves Wagtail at
-<http://localhost:8000>. Create an administrator in another terminal:
+Compose {% if database != "sqlite3" %}waits for {{ database_name }}, {% endif %}applies migrations and serves
+Wagtail at <http://localhost:8000>. Create an administrator in another terminal:
 
 ```shell
 docker compose exec web python manage.py createsuperuser
 ```
 
-Stop the services with `docker compose down`. Add `--volumes` to also delete the
-local database data.
+Stop the services with `make stop`.{% if database != "sqlite3" %} Run
+`docker compose down --volumes` to also delete the local database data.{% endif %}
 {% if database == "mysql" %}
 
 > [!NOTE]
@@ -41,27 +61,25 @@ local database data.
 
 ## Local UV setup
 
-Start only the database in Docker, install the locked dependencies, migrate, and
-run Django locally:
+{% if database == "sqlite3" %}Install the locked dependencies, migrate, and run Django locally:
+{% else %}Start only the database in Docker, install the locked dependencies, migrate,
+and run Django locally:
+{% endif %}
 
 ```shell
-docker compose up -d db
-uv sync
-uv run python manage.py migrate
-uv run python manage.py runserver
+make dev
 ```
 
-The settings default to the database exposed on `127.0.0.1`. Override
+{% if database == "sqlite3" %}SQLite data is stored in `db.sqlite3` in the project root.
+{% else %}The settings default to the database exposed on `127.0.0.1`. Override
 `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_HOST`, and
 `DATABASE_PORT` when needed.
+{% endif %}
 
 ## Quality checks
 
 ```shell
-uv run ruff check .
-uv run ruff format --check .
-uv run djangofmt .
-uv run python manage.py test
+make check
 ```
 
 Initialize version control and install the hooks after generation. Pre-commit's
