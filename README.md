@@ -54,6 +54,9 @@ Site name [This Is My Site]:
 It can also be supplied non-interactively with `--site-name`. This value populates
 `WAGTAIL_SITE_NAME` and the generated `AGENTS.md`. Unless `--directory` is supplied,
 it also determines the normalized project folder: `My Site` creates `./my_site`.
+If the site name contains no letters or numbers after ASCII normalization, such
+as `日本語のサイト`, the folder uses the normalized Python project name instead.
+The human-facing site name is preserved.
 It does not affect the Python package name.
 
 SQLite is used by default, so a generated site can run locally without a separate
