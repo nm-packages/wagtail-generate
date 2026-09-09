@@ -18,6 +18,54 @@ uv run pre-commit install
 
 Run every hook manually with `uv run pre-commit run --all-files`.
 
+Exercise the current generator source end to end in a disposable local site:
+
+```shell
+make playground
+```
+
+By default, Wagtail code is generated at the project root. To exercise generation
+in an alternate source folder instead:
+
+```shell
+make playground SITE_DIRECTORY=src
+```
+
+This places Wagtail code in `.playground/src/`, while `manage.py`, the UV project,
+virtual environment, and lockfile remain at `.playground/`. Both modes run the
+same migrations, administrator creation, checks, and development server. Use
+`make playground SITE_DIRECTORY=.` (or simply `make playground`) to switch back.
+Stop the server with Ctrl-C before switching; each run replaces the previous site.
+Only `.` and `src` are accepted playground options.
+
+Every run deletes the previous recognized `.playground/` directory, generates a
+fresh standard-layout SQLite project, installs its dependencies, applies
+migrations, creates a local administrator, runs Django system checks, and starts the development server at
+http://127.0.0.1:8000. Stop it with Ctrl-C before rebuilding or resetting.
+The site has its own virtual environment and lockfile. Its files and database are
+ignored by Git and are discarded on the next run.
+
+To remove the site without starting another:
+
+```shell
+make playground-reset
+```
+
+This developer workflow is the sole exception to the source-checkout destination
+guard. It rejects a symlink at `.playground/` and will not delete an existing
+folder without its playground marker. Ordinary `start` commands still refuse
+all destinations inside this repository.
+
+Wagtail admin is ready at http://127.0.0.1:8000/admin/ after startup:
+
+- Username: `admin`
+- Password: `playground`
+- Email: `admin@example.test`
+
+These fixed credentials are for the disposable local playground. The account is
+recreated automatically on every rebuild, and the login details are printed
+before the server starts.
+
 Run the CLI:
 
 ```shell
@@ -195,8 +243,8 @@ continue to work when the completed project moves from staging to its destinatio
 SQLite needs no additional database driver. The driver is `psycopg[binary]` for
 PostgreSQL or `mysqlclient` for MySQL.
 
-When running the tool from this repository, generation into the repository root
-or any directory below it is refused. This prevents generated sites from being
+When running the ordinary `start` command from this repository, generation into
+the repository root or any directory below it is refused. This prevents generated sites from being
 written over the tool's own source tree.
 
 The destination project folder must not contain any files or directories,
