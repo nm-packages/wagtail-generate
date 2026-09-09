@@ -24,8 +24,10 @@ creates opinionated Wagtail CMS projects from named codebase layouts.
   configuration out of the CLI layer.
 - Build and validate a complete generation plan before writing to disk.
 - Refuse to overwrite existing files unless the user explicitly opts in.
-- Never generate a site inside the `wagtail-generate` source checkout. Keep this
-  guard ahead of directory creation and external command execution.
+- Ordinary CLI generation must never write inside the source checkout. Keep this
+  guard ahead of directory creation and external command execution. The dedicated
+  `make playground` workflow may generate only into the checkout’s `.playground/`
+  directory; reset must reject symlinks and unrecognized directories.
 - Resolve intentionally floating Python and package choices before writing, record
   them in the generation plan and generated lock files, and keep rendered output
   deterministic for those resolved inputs.
