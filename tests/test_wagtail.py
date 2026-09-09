@@ -176,6 +176,10 @@ def test_run_wagtail_start_streams_native_command(
             {"cwd": generation_directory, "check": False},
         ),
         (
+            (["uvx", "uv@0.12.7", "venv", "--relocatable", "--python", "3.14"],),
+            {"cwd": generation_directory, "check": False},
+        ),
+        (
             (["uvx", "uv@0.12.7", "add", "wagtail", "psycopg[binary]"],),
             {"cwd": generation_directory, "check": False},
         ),
@@ -282,6 +286,7 @@ def test_run_wagtail_start_defaults_to_sqlite_without_driver(
     run.side_effect = [
         subprocess.CompletedProcess([], returncode=0),
         subprocess.CompletedProcess([], returncode=0),
+        subprocess.CompletedProcess([], returncode=0),
         subprocess.CompletedProcess([], returncode=1),
     ]
 
@@ -289,7 +294,7 @@ def test_run_wagtail_start_defaults_to_sqlite_without_driver(
 
     assert run_wagtail_start("example", project_root=project_root) == 1
     generation_directory = run.call_args_list[0].kwargs["cwd"]
-    assert run.call_args_list[2] == (
+    assert run.call_args_list[3] == (
         (["uvx", "uv@0.12.7", "add", "wagtail"],),
         {"cwd": generation_directory, "check": False},
     )

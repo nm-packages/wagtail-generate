@@ -176,6 +176,7 @@ Without a site subfolder, the command runs the equivalent of:
 uvx uv@0.12.7 python list --only-downloads --output-format json
 uvx uv@0.12.7 init --bare --no-workspace --python <latest-stable-major.minor>
 uvx uv@0.12.7 python pin <latest-stable-major.minor>
+uvx uv@0.12.7 venv --relocatable --python <latest-stable-major.minor>
 uvx uv@0.12.7 add wagtail
 uvx uv@0.12.7 add --dev ruff djangofmt pre-commit
 uvx uv@0.12.7 run wagtail start mysite .
@@ -184,6 +185,8 @@ uvx uv@0.12.7 run wagtail start mysite .
 The generator pins its UV command version to match the generated Dockerfile. The
 selected Python line and resolved dependencies are then recorded in
 `.python-version` and `uv.lock`, making the completed project repeatable.
+The virtual environment is created as relocatable so its command-line tools
+continue to work when the completed project moves from staging to its destination.
 
 SQLite needs no additional database driver. The driver is `psycopg[binary]` for
 PostgreSQL or `mysqlclient` for MySQL.

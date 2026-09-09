@@ -30,7 +30,7 @@ def test_complete_plan_is_rendered_without_writing_destination(
     assert plan.options is options
     assert plan.python_version == "3.14"
     assert plan.wagtail_command.arguments[-2:] == ("example", "sites/example")
-    assert plan.setup_commands[2].arguments[-2:] == (
+    assert plan.setup_commands[3].arguments[-2:] == (
         "wagtail",
         "psycopg[binary]",
     )
