@@ -13,6 +13,7 @@ from wagtail_generate.layouts import get_layout, layout_names
 from wagtail_generate.safety import (
     destination_is_in_source_checkout,
     source_checkout_root,
+    validate_source_package,
 )
 from wagtail_generate.wagtail import Database, run_wagtail_start
 
@@ -53,7 +54,9 @@ def normalize_subfolder(value: str) -> Path:
     subfolder = Path(value)
     if subfolder == Path(".") or subfolder.is_absolute() or ".." in subfolder.parts:
         raise ValueError("the subfolder must stay inside the project root")
-    return Path(*(normalize_package_name(part) for part in subfolder.parts))
+    normalized = Path(*(normalize_package_name(part) for part in subfolder.parts))
+    validate_source_package(normalized.parts[0])
+    return normalized
 
 
 def prompt_for_site_subfolder(
@@ -74,8 +77,8 @@ def prompt_for_site_subfolder(
                     requested_name = value or project_name
                     try:
                         subfolder = normalize_subfolder(requested_name)
-                    except ValueError:
-                        print("Enter a relative subfolder inside the project root.")
+                    except ValueError as error:
+                        print(f"Invalid subfolder: {error}")
                         continue
                     if str(subfolder) != requested_name:
                         print(f"Using subfolder name: {subfolder}")
@@ -218,10 +221,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             else:
                 try:
                     site_subfolder = normalize_subfolder(str(site_subfolder))
-                except ValueError:
+                except ValueError as error:
                     print(
-                        "error: --site-directory must be a relative Python package "
-                        "path inside the project root",
+                        f"error: --site-directory: {error}",
                         file=sys.stderr,
                     )
                     return 2
