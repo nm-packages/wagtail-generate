@@ -106,6 +106,42 @@ def test_start_creates_site_name_directory_by_default(
     find_checkout.assert_called_once_with()
 
 
+@pytest.mark.parametrize("site_name", ["日本語のサイト", "🏛️"])
+@pytest.mark.parametrize("prompted", [False, True])
+@pytest.mark.parametrize("explicit_directory", [False, True])
+@patch("wagtail_generate.cli.run_wagtail_start", return_value=0)
+def test_non_ascii_site_name_uses_project_name_as_directory_fallback(
+    run_start: Mock,
+    site_name: str,
+    prompted: bool,
+    explicit_directory: bool,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    arguments = ["start", "CMS Package", "--site-directory", "."]
+    if prompted:
+        monkeypatch.setattr("builtins.input", lambda _: site_name)
+    else:
+        arguments.extend(["--site-name", site_name])
+    destination = tmp_path / ("chosen" if explicit_directory else "cms_package")
+    if explicit_directory:
+        arguments.extend(["--directory", str(destination)])
+
+    assert main(arguments) == 0
+
+    run_start.assert_called_once_with(
+        project_name="cms_package",
+        site_name=site_name,
+        database="sqlite3",
+        project_root=destination,
+        site_subfolder=None,
+        template=None,
+        layout=STANDARD_LAYOUT,
+    )
+    assert not destination.exists()
+
+
 @patch("wagtail_generate.cli.run_wagtail_start", return_value=0)
 @patch("wagtail_generate.cli.source_checkout_root", return_value=None)
 def test_start_accepts_existing_empty_site_name_directory(

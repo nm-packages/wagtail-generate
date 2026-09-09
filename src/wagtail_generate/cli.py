@@ -171,9 +171,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print("error: --site-name cannot be empty", file=sys.stderr)
                 return 2
 
-        project_root = arguments.directory or (
-            Path.cwd() / normalize_package_name(site_name)
-        )
+        project_root = arguments.directory
+        if project_root is None:
+            try:
+                directory_name = normalize_package_name(site_name)
+            except ValueError:
+                directory_name = project_name
+            project_root = Path.cwd() / directory_name
         project_root = project_root.resolve()
         project_root_exists = project_root.exists()
 
