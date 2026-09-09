@@ -356,7 +356,7 @@ def _set_wagtail_site_name(settings_file: Path, site_name: str) -> None:
     content = settings_file.read_text()
     updated = re.sub(
         r"^WAGTAIL_SITE_NAME\s*=.*$",
-        f"WAGTAIL_SITE_NAME = {json.dumps(site_name)}",
+        lambda _: f"WAGTAIL_SITE_NAME = {json.dumps(site_name, ensure_ascii=False)}",
         content,
         flags=re.MULTILINE,
     )
