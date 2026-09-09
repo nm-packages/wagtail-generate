@@ -141,6 +141,8 @@ def build_generation_plan(
             )
         ),
         CommandPlan((*UV_COMMAND, "python", "pin", python_version)),
+        # Console scripts must keep working after the staged project is moved.
+        CommandPlan((*UV_COMMAND, "venv", "--relocatable", "--python", python_version)),
         CommandPlan((*UV_COMMAND, "add", *runtime_dependencies)),
         CommandPlan((*UV_COMMAND, "add", "--dev", "ruff", "djangofmt", "pre-commit")),
     )
