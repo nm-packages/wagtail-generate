@@ -18,6 +18,7 @@ from wagtail_generate.developer_tools import (
 )
 from wagtail_generate.layouts import STANDARD_LAYOUT, Layout
 from wagtail_generate.rendering import RenderedFile, plan_template, write_rendered_files
+from wagtail_generate.safety import validate_source_package
 
 ROOT_FILES = (".dockerignore", "Dockerfile", "manage.py")
 UV_VERSION = "0.12.7"
@@ -106,6 +107,7 @@ def run_wagtail_start(
             return 2
 
     try:
+        validate_source_package(options.settings_module.partition(".")[0])
         python_version = latest_stable_python_version(
             _nearest_existing_directory(project_directory)
         )
@@ -122,6 +124,7 @@ def build_generation_plan(
     python_version: str,
 ) -> GenerationPlan:
     """Render and validate every generator-owned action before writing files."""
+    validate_source_package(options.settings_module.partition(".")[0])
     runtime_dependencies = ["wagtail"]
     driver = database_driver(options.database)
     if driver is not None:

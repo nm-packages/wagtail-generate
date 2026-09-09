@@ -10,6 +10,7 @@ from wagtail_generate.cli import (
     display_site_name,
     main,
     normalize_package_name,
+    normalize_subfolder,
     prompt_for_site_name,
     prompt_for_site_subfolder,
 )
@@ -170,6 +171,49 @@ def test_start_refuses_nonempty_site_name_directory(
     assert ".hidden-file" in error
     run_start.assert_not_called()
     find_checkout.assert_called_once_with()
+
+
+@pytest.mark.parametrize("subfolder", ["site", "Site", "site/example", "json"])
+@patch("wagtail_generate.cli.run_wagtail_start")
+def test_start_rejects_standard_library_subfolder_before_generation(
+    run_start: Mock,
+    subfolder: str,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    destination = tmp_path / "generated"
+    assert (
+        main(
+            [
+                "start",
+                "example",
+                "--site-name",
+                "Example",
+                "--directory",
+                str(destination),
+                "--site-directory",
+                subfolder,
+            ]
+        )
+        == 2
+    )
+    assert "conflicts with Python's standard library" in capsys.readouterr().err
+    assert not destination.exists()
+    run_start.assert_not_called()
+
+
+def test_subfolder_prompt_retries_standard_library_name(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    responses = iter(["yes", "site", "src"])
+    assert prompt_for_site_subfolder("example", lambda _: next(responses)) == Path(
+        "src"
+    )
+    assert "conflicts with Python's standard library" in capsys.readouterr().out
+
+
+def test_nested_package_can_use_standard_library_name() -> None:
+    assert normalize_subfolder("src/site") == Path("src/site")
 
 
 @patch("wagtail_generate.cli.run_wagtail_start", return_value=1)

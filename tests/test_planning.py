@@ -2,8 +2,25 @@
 
 from pathlib import Path
 
+import pytest
+
 from wagtail_generate.layouts import STANDARD_LAYOUT, get_layout, layout_names
 from wagtail_generate.wagtail import ProjectOptions, build_generation_plan
+
+
+@pytest.mark.parametrize(
+    ("project_name", "subfolder"),
+    [("site", None), ("example", Path("site")), ("example", Path("email/cms"))],
+)
+def test_plan_rejects_standard_library_source_package(
+    project_name: str, subfolder: Path | None, tmp_path: Path
+) -> None:
+    options = ProjectOptions(
+        project_name, "Example", "sqlite3", tmp_path / "generated", subfolder, None
+    )
+    with pytest.raises(ValueError, match="conflicts with Python's standard library"):
+        build_generation_plan(options, "3.14")
+    assert not options.project_root.exists()
 
 
 def test_standard_layout_is_discoverable_by_stable_name() -> None:

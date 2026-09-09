@@ -1,7 +1,17 @@
 """Safety checks for project generation destinations."""
 
+import sys
 import tomllib
 from pathlib import Path
+
+
+def validate_source_package(name: str) -> None:
+    """Reject top-level source packages that collide with the standard library."""
+    if name in sys.stdlib_module_names:
+        raise ValueError(
+            f"source package '{name}' conflicts with Python's standard library; "
+            "choose a name such as 'src'"
+        )
 
 
 def source_checkout_root() -> Path | None:

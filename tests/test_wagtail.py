@@ -14,12 +14,36 @@ from wagtail_generate.wagtail import (
 )
 
 
+@pytest.mark.parametrize(
+    ("project_name", "subfolder"),
+    [("site", None), ("example", Path("site")), ("example", Path("json/cms"))],
+)
+@patch("wagtail_generate.wagtail.subprocess.run")
+def test_source_package_conflict_is_rejected_before_external_commands(
+    run: Mock,
+    project_name: str,
+    subfolder: Path | None,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    destination = tmp_path / "generated"
+    assert (
+        run_wagtail_start(
+            project_name, project_root=destination, site_subfolder=subfolder
+        )
+        == 2
+    )
+    assert "conflicts with Python's standard library" in capsys.readouterr().err
+    assert not destination.exists()
+    run.assert_not_called()
+
+
 def write_mock_wagtail_project(project_root: Path) -> None:
     """Create the relevant subset of Wagtail's default generated tree."""
     (project_root / "pyproject.toml").write_text(
         '[project]\nname = "example"\nversion = "0.1.0"\n'
     )
-    site_directory = project_root / "site"
+    site_directory = project_root / "src"
     moved_root_files = (".dockerignore", "Dockerfile", "manage.py")
     for filename in (*moved_root_files, "requirements.txt"):
         content = (
@@ -85,17 +109,17 @@ def test_run_wagtail_start_streams_native_command(
         site_name="Example website",
         database="postgresql",
         project_root=project_root,
-        site_subfolder=Path("site"),
+        site_subfolder=Path("src"),
         template=Path("custom-template"),
     )
 
     assert result == 0
-    site_directory = project_root / "site"
+    site_directory = project_root / "src"
     moved_root_files = (".dockerignore", "Dockerfile", "manage.py")
     package_directory = site_directory / "example"
     home_directory = site_directory / "home"
     migration = home_directory / "migrations" / "0002_create_homepage.py"
-    assert (project_root / "site").is_dir()
+    assert (project_root / "src").is_dir()
     for filename in moved_root_files:
         assert (project_root / filename).is_file()
         assert not (site_directory / filename).exists()
@@ -104,8 +128,8 @@ def test_run_wagtail_start_streams_native_command(
     assert not (site_directory / "README.md").exists()
     readme = (project_root / "README.md").read_text()
     assert readme.startswith("# Example website")
-    assert "Site source: `site`" in readme
-    assert "Django settings: `site.settings`" in readme
+    assert "Site source: `src`" in readme
+    assert "Django settings: `src.settings`" in readme
     assert "Codebase layout: `standard`" in readme
     assert "Database: PostgreSQL" in readme
     assert "Python: 3.14" in readme
@@ -120,8 +144,8 @@ def test_run_wagtail_start_streams_native_command(
     assert "Example website" in agents
     assert "Python project package: `example`" in agents
     assert "Codebase layout: `standard`" in agents
-    assert "Site source directory: `site`" in agents
-    assert "Django settings package: `site.settings`" in agents
+    assert "Site source directory: `src`" in agents
+    assert "Django settings package: `src.settings`" in agents
     assert "Database: `postgresql`" in agents
     assert "custom template `custom-template`" in agents
     assert "postgres:17-bookworm" in (project_root / "compose.yaml").read_text()
@@ -138,18 +162,18 @@ def test_run_wagtail_start_streams_native_command(
     assert (project_root / ".env.example").is_file()
     assert not package_directory.exists()
     assert (site_directory / "settings" / "base.py").is_file()
-    assert "site.settings.dev" in (project_root / "manage.py").read_text()
+    assert "src.settings.dev" in (project_root / "manage.py").read_text()
     settings = (site_directory / "settings" / "base.py").read_text()
-    assert '"site.home"' in settings
-    assert '"site.search"' in settings
-    assert '"site.urls"' in settings
+    assert '"src.home"' in settings
+    assert '"src.search"' in settings
+    assert '"src.urls"' in settings
     assert 'WAGTAIL_SITE_NAME = "Example website"' in settings
     assert '"ENGINE": "django.db.backends.postgresql"' in settings
     assert '"django.contrib.postgres"' in settings
     assert 'os.environ.get("DATABASE_HOST", "127.0.0.1")' in settings
-    assert (home_directory / "apps.py").read_text() == '    name = "site.home"'
+    assert (home_directory / "apps.py").read_text() == '    name = "src.home"'
     assert (home_directory / "tests.py").read_text() == (
-        "from site.home.models import HomePage"
+        "from src.home.models import HomePage"
     )
     assert migration.read_text() == 'HomePage = apps.get_model("home.HomePage")'
     generation_directory = run.call_args_list[0].kwargs["cwd"]
@@ -206,18 +230,18 @@ def test_run_wagtail_start_streams_native_command(
                     "wagtail",
                     "start",
                     "example",
-                    "site",
+                    "src",
                     "--template=custom-template",
                 ],
             ),
             {"cwd": generation_directory, "check": False},
         ),
         (
-            (["uvx", "uv@0.12.7", "run", "djangofmt", "site"],),
+            (["uvx", "uv@0.12.7", "run", "djangofmt", "src"],),
             {"cwd": generation_directory, "check": False},
         ),
         (
-            (["uvx", "uv@0.12.7", "run", "ruff", "check", "--fix", "site"],),
+            (["uvx", "uv@0.12.7", "run", "ruff", "check", "--fix", "src"],),
             {"cwd": generation_directory, "check": False},
         ),
         (
@@ -228,7 +252,7 @@ def test_run_wagtail_start_streams_native_command(
                     "run",
                     "ruff",
                     "format",
-                    "site",
+                    "src",
                     "manage.py",
                 ],
             ),
@@ -328,7 +352,7 @@ def test_late_command_failure_does_not_publish_partial_project(
     result = run_wagtail_start(
         "example",
         project_root=project_root,
-        site_subfolder=Path("site"),
+        site_subfolder=Path("src"),
     )
 
     assert result == 7
@@ -381,7 +405,7 @@ def test_subfolder_generation_refuses_root_file_conflict(
     result = run_wagtail_start(
         "example",
         project_root=tmp_path,
-        site_subfolder=Path("site"),
+        site_subfolder=Path("src"),
     )
 
     assert result == 2

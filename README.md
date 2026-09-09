@@ -158,10 +158,14 @@ uv run wagtail-generate start mysite \
   --site-name "My Site" \
   --database postgresql \
   --directory path/to/project \
-  --site-directory site
+  --site-directory src
 ```
 
 Use `--site-directory .` to generate the Wagtail code directly in the project root.
+The top-level source package must not conflict with a Python standard-library
+module such as `site`, `email`, or `json`. Use a name such as `src` for the source
+subfolder. When generating directly in the root, this restriction applies to the
+project package name.
 
 Custom Wagtail project templates can be supplied as a file or directory. Relative
 template paths are resolved from the directory where `wagtail-generate` is run:
