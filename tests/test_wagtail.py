@@ -38,6 +38,30 @@ def test_source_package_conflict_is_rejected_before_external_commands(
     run.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    ("project_name", "subfolder"),
+    [("django", None), ("example", Path("django")), ("example", Path("wagtail/cms"))],
+)
+@patch("wagtail_generate.wagtail.subprocess.run")
+def test_dependency_conflict_is_rejected_before_external_commands(
+    run: Mock,
+    project_name: str,
+    subfolder: Path | None,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    destination = tmp_path / "generated"
+    assert (
+        run_wagtail_start(
+            project_name, project_root=destination, site_subfolder=subfolder
+        )
+        == 2
+    )
+    assert "conflicts with a generated-project dependency" in capsys.readouterr().err
+    assert not destination.exists()
+    run.assert_not_called()
+
+
 def write_mock_wagtail_project(project_root: Path) -> None:
     """Create the relevant subset of Wagtail's default generated tree."""
     (project_root / "pyproject.toml").write_text(

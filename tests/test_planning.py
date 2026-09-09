@@ -60,3 +60,20 @@ def test_complete_plan_is_rendered_without_writing_destination(
         Path("AGENTS.md"),
         Path("README.md"),
     }
+
+
+@pytest.mark.parametrize(
+    ("project_name", "subfolder"),
+    [("django", None), ("example", Path("django")), ("example", Path("wagtail/cms"))],
+)
+def test_plan_rejects_dependency_source_package(
+    project_name: str, subfolder: Path | None, tmp_path: Path
+) -> None:
+    options = ProjectOptions(
+        project_name, "Example", "sqlite3", tmp_path / "generated", subfolder, None
+    )
+    with pytest.raises(
+        ValueError, match="conflicts with a generated-project dependency"
+    ):
+        build_generation_plan(options, "3.14")
+    assert not options.project_root.exists()

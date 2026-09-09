@@ -202,6 +202,49 @@ def test_start_rejects_standard_library_subfolder_before_generation(
     run_start.assert_not_called()
 
 
+@pytest.mark.parametrize("subfolder", ["django", "Django", "wagtail/cms", "taggit"])
+@patch("wagtail_generate.cli.run_wagtail_start")
+def test_start_rejects_dependency_subfolder_before_generation(
+    run_start: Mock,
+    subfolder: str,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    destination = tmp_path / "generated"
+    assert (
+        main(
+            [
+                "start",
+                "example",
+                "--site-name",
+                "Example",
+                "--directory",
+                str(destination),
+                "--site-directory",
+                subfolder,
+            ]
+        )
+        == 2
+    )
+    assert "conflicts with a generated-project dependency" in capsys.readouterr().err
+    assert not destination.exists()
+    run_start.assert_not_called()
+
+
+def test_subfolder_prompt_retries_dependency_name(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    responses = iter(["yes", "django", "src"])
+    assert prompt_for_site_subfolder("example", lambda _: next(responses)) == Path(
+        "src"
+    )
+    assert "conflicts with a generated-project dependency" in capsys.readouterr().out
+
+
+def test_nested_package_can_use_dependency_name() -> None:
+    assert normalize_subfolder("src/django") == Path("src/django")
+
+
 def test_subfolder_prompt_retries_standard_library_name(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
