@@ -65,3 +65,47 @@ def test_write_template_renders_content_and_applies_mode(tmp_path: Path) -> None
 
     assert "DJANGO_SETTINGS_MODULE=src.settings.dev" in destination.read_text()
     assert destination.stat().st_mode & 0o777 == 0o700
+
+
+@pytest.mark.parametrize("database", ["sqlite3", "postgresql", "mysql"])
+@pytest.mark.parametrize("source_directory", [".", "src"])
+def test_agent_guidance_matches_generated_environment(
+    database: str, source_directory: str
+) -> None:
+    settings_module = "example.settings" if source_directory == "." else "src.settings"
+    content = render_template(
+        "AGENTS.md.jinja",
+        {
+            "site_name": "Example",
+            "template_description": "the standard layout",
+            "project_name": "example",
+            "layout": "standard",
+            "source_directory": source_directory,
+            "settings_module": settings_module,
+            "database": database,
+        },
+    )
+
+    assert f"Site source directory: `{source_directory}`" in content
+    assert f"Django settings package: `{settings_module}`" in content
+    assert "project root, where `manage.py` and `compose.yaml` live" in content
+    assert "Django's built-in test runner" in content
+    for command in (
+        "uv lock --check",
+        "uv run ruff check .",
+        "uv run ruff format --check .",
+        "uv run python scripts/check_django_templates.py",
+        "uv run python manage.py check",
+        "uv run python manage.py makemigrations --check --dry-run",
+        "uv run python manage.py test",
+    ):
+        assert f"docker compose run --rm web {command}" in content
+    if database == "sqlite3":
+        assert "`db.sqlite3`" in content
+        assert "make database" not in content
+        assert "DATABASE_HOST" not in content
+    else:
+        assert "`db.sqlite3`" not in content
+        assert "make database" in content
+        assert "DATABASE_HOST=127.0.0.1" in content
+        assert f"project uses `{database}`" in content

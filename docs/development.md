@@ -63,6 +63,12 @@ Application code lives in `src/wagtail_generate/` and tests in `tests/`.
 Generated file content lives in `src/wagtail_generate/templates/`: `.jinja` files
 are rendered with project values; files in `templates/static/` are copied.
 The generated README is the home for instructions on working in a generated site.
+Generated agent guidance defaults to backend commands in the Compose `web`
+service, with local UV commands when the user chooses that workflow. Keep its
+command examples and the generated README aligned with the actual tooling.
+Generated sites use Django's test runner, Ruff, and djangofmt; their completion
+checks also include lockfile validation, Django system checks, and detection of
+missing migrations. The generator's pytest and mypy setup is separate.
 
 ## Design conventions
 

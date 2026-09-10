@@ -84,9 +84,38 @@ make dev
 
 ## Quality checks
 
+AI agents default to running backend commands inside the Compose `web` service,
+unless you choose the local UV workflow. The generated `AGENTS.md` describes the
+development conventions and full completion checklist.
+
+For Docker development, build the image with `docker compose build`, then run:
+
+```shell
+docker compose run --rm web uv sync --locked
+docker compose run --rm web uv lock --check
+docker compose run --rm web uv run ruff check .
+docker compose run --rm web uv run ruff format --check .
+docker compose run --rm web uv run python scripts/check_django_templates.py
+docker compose run --rm web uv run python manage.py check
+docker compose run --rm web uv run python manage.py makemigrations --check --dry-run
+docker compose run --rm web uv run python manage.py test
+```
+
+For local development, `make check` runs lint, formatting checks, and Django's
+test suite. Also check the lockfile, system configuration, and missing migrations:
+
 ```shell
 make check
+uv lock --check
+{% if database != "sqlite3" %}DATABASE_HOST=127.0.0.1 {% endif %}uv run python manage.py check
+{% if database != "sqlite3" %}DATABASE_HOST=127.0.0.1 {% endif %}uv run python manage.py makemigrations --check --dry-run
 ```
+
+{% if database != "sqlite3" %}Start the database with `make database` first. Direct local Django commands need
+the database credentials and port from `.env` exported in your shell; the Make
+targets load `.env` themselves.
+
+{% endif %}The Git hooks below run on the host using UV, including during Docker development.
 
 Initialize version control and install the hooks after generation. Pre-commit's
 `--all-files` option means all files known to Git, so the initial `git add` is
