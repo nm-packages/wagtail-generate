@@ -1,0 +1,51 @@
+# Testing
+
+- Use Django's built-in test runner and place tests in each app's `tests.py` or
+  `tests/` package, following the existing structure. Do not add pytest or a type
+  checker unless the project adopts it explicitly.
+- Add regression tests for bug fixes and tests for changed behaviour. Cover
+  meaningful success, invalid-input, and permission-denied cases rather than
+  mirroring the implementation.
+- Test model validation and constraints, forms, views, template output, and
+  Wagtail page serving or editorial behaviour as relevant. Use Wagtail testing
+  helpers where useful; exercise drafts/previews and publishing when affected.
+- Use `django.test.TestCase` for database tests, `SimpleTestCase` when no database
+  is needed, and `TransactionTestCase` when actual transaction behaviour matters.
+- Keep tests isolated and deterministic. Mock external services at their boundary;
+  do not make live network calls. Use focused test data and temporary media storage
+  for upload tests, cleaning up files afterwards.
+- Run targeted tests during development by passing an app or test label to
+  `manage.py test`; run the full suite before completing backend changes.
+
+# Formatting and required checks
+
+Use the existing Ruff and djangofmt configuration in `pyproject.toml`. Fix lint
+issues and format changed Python/templates with:
+
+```shell
+docker compose run --rm web uv run ruff check --fix .
+docker compose run --rm web uv run ruff format .
+docker compose run --rm web uv run djangofmt .
+```
+
+Inspect formatter changes and avoid unrelated formatting churn. Before completing
+backend changes, run all of these and resolve failures caused by the change:
+
+```shell
+docker compose run --rm web uv lock --check
+docker compose run --rm web uv run ruff check .
+docker compose run --rm web uv run ruff format --check .
+docker compose run --rm web uv run python scripts/check_django_templates.py
+docker compose run --rm web uv run python manage.py check
+docker compose run --rm web uv run python manage.py makemigrations --check --dry-run
+docker compose run --rm web uv run python manage.py test
+```
+
+Documentation-only changes may use focused verification. If a required check
+cannot run, report the command and blocker; do not claim it passed or weaken
+checks to get a green result.
+
+Install Git hooks on the host with `uv run pre-commit install`. Hooks use host UV;
+they complement the container checks. Run `uv run pre-commit run --all-files`
+when checking hooks. Pre-commit only checks files known to Git, so new files must
+be intentionally staged to be included. Do not stage unrelated user changes.

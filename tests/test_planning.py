@@ -59,6 +59,9 @@ def test_complete_plan_is_rendered_without_writing_destination(
     assert {file.relative_path for file in plan.documentation_files} == {
         Path("AGENTS.md"),
         Path("README.md"),
+        Path("docs/agent-instructions/environment.md"),
+        Path("docs/agent-instructions/backend.md"),
+        Path("docs/agent-instructions/checks.md"),
     }
 
 
@@ -77,3 +80,25 @@ def test_plan_rejects_dependency_source_package(
     ):
         build_generation_plan(options, "3.14")
     assert not options.project_root.exists()
+
+
+def test_documentation_preserves_custom_agent_guidance(tmp_path: Path) -> None:
+    from wagtail_generate.rendering import write_rendered_files
+
+    options = ProjectOptions("example", "Example", "sqlite3", tmp_path, None, None)
+    plan = build_generation_plan(options, "3.14")
+    custom_paths = (
+        Path("AGENTS.md"),
+        Path("docs/agent-instructions/backend.md"),
+    )
+    for path in custom_paths:
+        destination = tmp_path / path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text("Custom project guidance\n")
+
+    write_rendered_files(tmp_path, plan.documentation_files)
+
+    for path in custom_paths:
+        assert (tmp_path / path).read_text() == "Custom project guidance\n"
+    assert (tmp_path / "docs/agent-instructions/checks.md").is_file()
+    assert (tmp_path / "docs/agent-instructions/environment.md").is_file()

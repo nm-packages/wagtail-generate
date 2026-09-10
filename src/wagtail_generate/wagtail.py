@@ -187,6 +187,15 @@ def build_generation_plan(
             documentation_context | {"template_description": template_description},
             overwrite=False,
         ),
+        *(
+            plan_template(
+                f"docs/agent-instructions/{name}.md",
+                f"docs/agent-instructions/{name}.md.jinja",
+                documentation_context,
+                overwrite=False,
+            )
+            for name in ("environment", "backend", "checks")
+        ),
         plan_template(
             "README.md",
             options.layout.readme_template,

@@ -172,6 +172,13 @@ def test_run_wagtail_start_streams_native_command(
     assert "Django settings package: `src.settings`" in agents
     assert "Database: `postgresql`" in agents
     assert "custom template `custom-template`" in agents
+    for name in ("environment", "backend", "checks"):
+        path = f"docs/agent-instructions/{name}.md"
+        assert f"]({path})" in agents
+        assert (project_root / path).is_file()
+    backend = (project_root / "docs/agent-instructions/backend.md").read_text()
+    assert "`src.settings`" in backend
+    assert "project uses `postgresql`" in backend
     assert "postgres:17-bookworm" in (project_root / "compose.yaml").read_text()
     assert (project_root / "Makefile").is_file()
     assert "uv sync --locked" in (project_root / "Dockerfile").read_text()

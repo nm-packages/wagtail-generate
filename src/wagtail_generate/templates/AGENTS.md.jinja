@@ -18,160 +18,25 @@ Wagtail versions; consult their version-matched official documentation when an
 API is uncertain. Keep human-facing development instructions in the README or
 `docs/` and update them when workflows change.
 
-## Environment and commands
+## Working rules
 
-Run commands from the project root, where `manage.py` and `compose.yaml` live,
-regardless of the site source directory. Run Python, Django, tests, and formatters
-inside the Docker `web` service by default. Use local UV commands when the user
-has chosen local development; do not silently switch environments after a failure.
-Git commands and Git hook installation run on the host.
+Run commands from the project root, where `manage.py` and `compose.yaml` live.
+Use UV inside the Docker `web` service by default; use local UV when the user
+chooses local development. Do not silently switch environments after a failure.
+Preserve secrets, existing `.env` files, unrelated work, and database data.
+Do not delete data or Docker volumes without explicit user authorization.
 
-Follow the README for `.env` setup; preserve an existing `.env`. Prepare Docker:
+## Task guidance
 
-```shell
-docker compose build
-docker compose run --rm web uv sync --locked
-```
+Read the relevant guides before starting a task; these are project instructions:
 
-One-off commands work without starting the web server; Compose starts required
-database dependencies. To run the site, use `make docker`. With an already running
-web service, `docker compose exec web uv run ...` is an alternative to
-`docker compose run --rm web uv run ...`.
-
-```shell
-docker compose run --rm web uv run python manage.py makemigrations
-docker compose run --rm web uv run python manage.py migrate
-docker compose run --rm web uv run python manage.py test
-```
-
-Use `docker compose run --rm web uv add PACKAGE` or `uv remove PACKAGE` with the
-same Compose prefix to manage dependencies; use `uv add --dev PACKAGE` for
-development tools. Keep `pyproject.toml` and `uv.lock` together in the change. Do
-not maintain `requirements.txt` or install packages with pip. Prefer existing
-libraries and the standard library to new dependencies. Rebuild the image when
-its dependencies or system packages change; sync the container environment from
-the lockfile when dependencies change.
-
-For the user-selected local workflow, run `make sync` first.
-{% if database != "sqlite3" %}Start the database with `make database`. Use `DATABASE_HOST=127.0.0.1` for local
-Django commands and the credentials/port configured in `.env`; Make targets load
-that file, but direct shell commands require those variables in the environment.
-{% endif %}Replace `docker compose run --rm web uv run` below with `uv run` for local
-checks. `make dev` runs locally and applies migrations; `make check` runs local
-lint/format checks and tests, but does not include the explicit system and
-missing-migration checks below.
-
-## Backend and Wagtail development
-
-- Organize code into cohesive Django apps within `{{ source_directory }}` and
-  follow existing imports and app configuration. Keep settings in
-  `{{ settings_module }}` and preserve the development/production split.
-- Use conventional Django models, forms, views, and querysets. Keep views and
-  request handlers focused; extract reusable or complex business operations into
-  focused modules when needed. Do not impose a service layer on simple CRUD.
-- Put validation where all relevant entry points can use it. Do not assume
-  `save()` automatically runs model validation. Use database constraints for
-  invariants that must survive concurrent writes and transactions for related
-  writes that must succeed together. Avoid hidden side effects in signals.
-- Use Wagtail's page, snippet, StreamField, and admin extension APIs rather than
-  bypassing its content lifecycle. Consider editor panels, help text, validation,
-  allowed parent/child pages, and template rendering when adding content types.
-- Preserve revisions, drafts, previews, publishing, scheduling, workflows,
-  permissions, and localization where the feature uses them. Public queries must
-  respect publication and access restrictions; do not expose drafts or private
-  content through custom views or APIs.
-- Treat StreamField block names and stored values as persisted content contracts.
-  Plan content migrations for renames, removals, or structural changes. Test
-  rendering of both existing and newly created content.
-- Keep business logic and database queries out of templates. Use Django escaping
-  and Wagtail's supported rich-text and image rendering tools; do not mark
-  untrusted content safe. Preserve semantic HTML, labels, keyboard access, and
-  appropriate alternative text when changing templates or editor interfaces.
-
-## Database changes
-
-- Create and include Django migrations whenever model state changes. Inspect
-  generated operations and check that no migrations are missing.
-- Consider existing rows before adding required fields, uniqueness constraints,
-  or changing types. Split schema and data changes when needed to preserve data.
-- Use historical models from the migration app registry in data migrations.
-  Consider reversibility and document intentionally irreversible operations.
-  Do not rewrite migrations already shared or applied elsewhere.
-- Verify relevant migrations against the selected database and test data
-  transformations. Avoid relying on SQLite-only behaviour for another database.
-{% if database == "sqlite3" %}- The local SQLite database is `db.sqlite3`; do not commit it.
-{% else %}- The project uses `{{ database }}`. Preserve its Compose configuration and
-  database-specific settings when changing the backend.
-{% endif %}- Stop containers with `docker compose down`. Do not delete database files,
-  drop databases, flush data, or run `docker compose down --volumes` without
-  explicit user authorization for that data reset. Never use production data
-  or production credentials for development tests.
-
-## Testing
-
-- Use Django's built-in test runner and place tests in each app's `tests.py` or
-  `tests/` package, following the existing structure. Do not add pytest or a type
-  checker unless the project adopts it explicitly.
-- Add regression tests for bug fixes and tests for changed behaviour. Cover
-  meaningful success, invalid-input, and permission-denied cases rather than
-  mirroring the implementation.
-- Test model validation and constraints, forms, views, template output, and
-  Wagtail page serving or editorial behaviour as relevant. Use Wagtail testing
-  helpers where useful; exercise drafts/previews and publishing when affected.
-- Use `django.test.TestCase` for database tests, `SimpleTestCase` when no database
-  is needed, and `TransactionTestCase` when actual transaction behaviour matters.
-- Keep tests isolated and deterministic. Mock external services at their boundary;
-  do not make live network calls. Use focused test data and temporary media storage
-  for upload tests, cleaning up files afterwards.
-- Run targeted tests during development by passing an app or test label to
-  `manage.py test`; run the full suite before completing backend changes.
-
-## Formatting and required checks
-
-Use the existing Ruff and djangofmt configuration in `pyproject.toml`. Fix lint
-issues and format changed Python/templates with:
-
-```shell
-docker compose run --rm web uv run ruff check --fix .
-docker compose run --rm web uv run ruff format .
-docker compose run --rm web uv run djangofmt .
-```
-
-Inspect formatter changes and avoid unrelated formatting churn. Before completing
-backend changes, run all of these and resolve failures caused by the change:
-
-```shell
-docker compose run --rm web uv lock --check
-docker compose run --rm web uv run ruff check .
-docker compose run --rm web uv run ruff format --check .
-docker compose run --rm web uv run python scripts/check_django_templates.py
-docker compose run --rm web uv run python manage.py check
-docker compose run --rm web uv run python manage.py makemigrations --check --dry-run
-docker compose run --rm web uv run python manage.py test
-```
-
-Documentation-only changes may use focused verification. If a required check
-cannot run, report the command and blocker; do not claim it passed or weaken
-checks to get a green result.
-
-Install Git hooks on the host with `uv run pre-commit install`. Hooks use host UV;
-they complement the container checks. Run `uv run pre-commit run --all-files`
-when checking hooks. Pre-commit only checks files known to Git, so new files must
-be intentionally staged to be included. Do not stage unrelated user changes.
-
-## Security and performance
-
-- Keep secrets, `.env`, database files, and uploaded media out of version control.
-  Read deployment values from the environment; preserve secure production
-  settings and do not disable CSRF, authentication, or authorization to fix tests.
-- Enforce permissions server-side for custom views, APIs, admin actions, and
-  object access. Validate input and uploads, use ORM parameterization, and avoid
-  logging credentials or sensitive content.
-- Consider query counts for page listings, StreamField rendering, and related
-  objects. Use `select_related`/`prefetch_related` where appropriate, paginate
-  unbounded lists, and add query-count tests for relevant performance fixes.
-- Introduce caching only with a clear invalidation strategy that respects
-  publication state, permissions, and localization where applicable.
+- [Environment and commands](docs/agent-instructions/environment.md): read before
+  running commands, setting up services, or changing dependencies.
+- [Backend and Wagtail](docs/agent-instructions/backend.md): read before changing
+  Python, models, migrations, templates, permissions, or queries.
+- [Testing and checks](docs/agent-instructions/checks.md): read before writing tests
+  and before completing code changes. It contains the required completion checks;
+  documentation-only changes may use focused verification.
 
 ## Git and completion
 
