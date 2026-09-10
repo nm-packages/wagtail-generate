@@ -113,3 +113,43 @@ def test_agent_guidance_matches_generated_environment(
         assert "make database" in content
         assert "DATABASE_HOST=127.0.0.1" in content
         assert f"project uses `{database}`" in content
+
+
+@pytest.mark.parametrize("database", ["sqlite3", "postgresql", "mysql"])
+@pytest.mark.parametrize("source_directory", [".", "src"])
+def test_readme_preserves_markdown_spacing_without_extra_blank_lines(
+    database: str, source_directory: str
+) -> None:
+    content = render_template(
+        "README.md.jinja",
+        {
+            "site_name": "Example",
+            "project_name": "example",
+            "layout": "standard",
+            "source_directory": source_directory,
+            "settings_module": "example.settings",
+            "database": database,
+            "database_name": database,
+            "python_version": "3.14",
+        },
+    )
+
+    assert "\n\n\n" not in content
+    assert content.endswith(".\n")
+    lines = content.splitlines()
+    in_code_block = False
+    for index, line in enumerate(lines):
+        if line.startswith("## "):
+            assert lines[index - 1] == lines[index + 1] == ""
+        if line.startswith("```"):
+            if in_code_block:
+                assert lines[index + 1] == ""
+            else:
+                assert lines[index - 1] == ""
+            in_code_block = not in_code_block
+    assert not in_code_block
+    if database == "mysql":
+        assert "\n\n> [!NOTE]\n> Django warns" in content
+        assert "setup error.\n\n## Local UV setup" in content
+    else:
+        assert "> [!NOTE]" not in content

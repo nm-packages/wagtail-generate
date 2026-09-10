@@ -18,9 +18,9 @@ Wagtail CMS project generated with `wagtail-generate`.
 ## Quick start
 
 {% if database == "sqlite3" %}Install dependencies, apply migrations, and run Wagtail locally:
-{% else %}Create the local environment file, start the database container, install
+{%- else %}Create the local environment file, start the database container, install
 dependencies, apply migrations, and run Wagtail locally:
-{% endif %}
+{%- endif %}
 
 ```shell
 {% if database != "sqlite3" %}cp .env.example .env
@@ -36,9 +36,9 @@ development commands.
 
 {% if database == "sqlite3" %}Copy the example environment file to change the forwarded web port, then start
 the complete development environment:
-{% else %}Copy the example environment file to change credentials or forwarded ports, then
+{%- else %}Copy the example environment file to change credentials or forwarded ports, then
 start the complete development environment:
-{% endif %}
+{%- endif %}
 
 ```shell
 cp .env.example .env
@@ -58,29 +58,29 @@ docker compose exec web python manage.py createsuperuser
 
 Stop the services with `make stop`.{% if database != "sqlite3" %} Run
 `docker compose down --volumes` to also delete the local database data.{% endif %}
-{% if database == "mysql" %}
+{%- if database == "mysql" %}
 
 > [!NOTE]
 > Django warns that MySQL cannot enforce Wagtail's conditional `WorkflowState`
 > uniqueness constraint. This is a database limitation rather than a setup error.
-{% endif %}
+{%- endif %}
 
 ## Local UV setup
 
 {% if database == "sqlite3" %}Install the locked dependencies, migrate, and run Django locally:
-{% else %}Start only the database in Docker, install the locked dependencies, migrate,
+{%- else %}Start only the database in Docker, install the locked dependencies, migrate,
 and run Django locally:
-{% endif %}
+{%- endif %}
 
 ```shell
 make dev
 ```
 
 {% if database == "sqlite3" %}SQLite data is stored in `db.sqlite3` in the project root.
-{% else %}The settings default to the database exposed on `127.0.0.1`. Override
+{%- else %}The settings default to the database exposed on `127.0.0.1`. Override
 `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_HOST`, and
 `DATABASE_PORT` when needed.
-{% endif %}
+{%- endif %}
 
 ## Quality checks
 
