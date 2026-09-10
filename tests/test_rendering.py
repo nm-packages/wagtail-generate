@@ -73,18 +73,22 @@ def test_agent_guidance_matches_generated_environment(
     database: str, source_directory: str
 ) -> None:
     settings_module = "example.settings" if source_directory == "." else "src.settings"
-    content = render_template(
-        "AGENTS.md.jinja",
-        {
-            "site_name": "Example",
-            "template_description": "the standard layout",
-            "project_name": "example",
-            "layout": "standard",
-            "source_directory": source_directory,
-            "settings_module": settings_module,
-            "database": database,
-        },
-    )
+    context = {
+        "site_name": "Example",
+        "template_description": "the standard layout",
+        "project_name": "example",
+        "layout": "standard",
+        "source_directory": source_directory,
+        "settings_module": settings_module,
+        "database": database,
+    }
+    content = render_template("AGENTS.md.jinja", context)
+    assert len(content.splitlines()) <= 60
+    assert "docker compose run --rm web uv run ruff" not in content
+    for name in ("environment", "backend", "checks"):
+        path = f"docs/agent-instructions/{name}.md"
+        assert f"]({path})" in content
+        content += render_template(f"{path}.jinja", context)
 
     assert f"Site source directory: `{source_directory}`" in content
     assert f"Django settings package: `{settings_module}`" in content

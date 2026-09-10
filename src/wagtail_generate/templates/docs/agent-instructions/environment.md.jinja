@@ -1,0 +1,43 @@
+# Environment and commands
+
+Run commands from the project root, where `manage.py` and `compose.yaml` live,
+regardless of the site source directory. Run Python, Django, tests, and formatters
+inside the Docker `web` service by default. Use local UV commands when the user
+has chosen local development; do not silently switch environments after a failure.
+Git commands and Git hook installation run on the host.
+
+Follow the README for `.env` setup; preserve an existing `.env`. Prepare Docker:
+
+```shell
+docker compose build
+docker compose run --rm web uv sync --locked
+```
+
+One-off commands work without starting the web server; Compose starts required
+database dependencies. To run the site, use `make docker`. With an already running
+web service, `docker compose exec web uv run ...` is an alternative to
+`docker compose run --rm web uv run ...`.
+
+```shell
+docker compose run --rm web uv run python manage.py makemigrations
+docker compose run --rm web uv run python manage.py migrate
+docker compose run --rm web uv run python manage.py test
+```
+
+Use `docker compose run --rm web uv add PACKAGE` or `uv remove PACKAGE` with the
+same Compose prefix to manage dependencies; use `uv add --dev PACKAGE` for
+development tools. Keep `pyproject.toml` and `uv.lock` together in the change. Do
+not maintain `requirements.txt` or install packages with pip. Prefer existing
+libraries and the standard library to new dependencies. Rebuild the image when
+its dependencies or system packages change; sync the container environment from
+the lockfile when dependencies change.
+
+For the user-selected local workflow, run `make sync` first.
+{% if database != "sqlite3" %}Start the database with `make database`. Use `DATABASE_HOST=127.0.0.1` for local
+Django commands and the credentials/port configured in `.env`; Make targets load
+that file, but direct shell commands require those variables in the environment.
+{% endif %}Replace `docker compose run --rm web uv run` with `uv run` for local
+checks in [checks.md](checks.md). `make dev` runs locally and applies migrations;
+`make check` runs local lint/format checks and tests, but does not include the
+explicit system and
+missing-migration checks in that guide.

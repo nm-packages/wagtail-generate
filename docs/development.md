@@ -66,6 +66,11 @@ The generated README is the home for instructions on working in a generated site
 Generated agent guidance defaults to backend commands in the Compose `web`
 service, with local UV commands when the user chooses that workflow. Keep its
 command examples and the generated README aligned with the actual tooling.
+Keep the generated `AGENTS.md` concise: project context, working rules, and links
+to task-specific guidance in `docs/agent-instructions/`. Environment commands,
+backend conventions, and testing/completion checks live in those linked guides.
+Render all guides in the generation plan and preserve existing guidance supplied
+by custom templates.
 Generated sites use Django's test runner, Ruff, and djangofmt; their completion
 checks also include lockfile validation, Django system checks, and detection of
 missing migrations. The generator's pytest and mypy setup is separate.

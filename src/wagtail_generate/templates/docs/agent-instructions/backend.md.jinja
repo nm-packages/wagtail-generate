@@ -1,0 +1,59 @@
+# Backend and Wagtail development
+
+- Organize code into cohesive Django apps within `{{ source_directory }}` and
+  follow existing imports and app configuration. Keep settings in
+  `{{ settings_module }}` and preserve the development/production split.
+- Use conventional Django models, forms, views, and querysets. Keep views and
+  request handlers focused; extract reusable or complex business operations into
+  focused modules when needed. Do not impose a service layer on simple CRUD.
+- Put validation where all relevant entry points can use it. Do not assume
+  `save()` automatically runs model validation. Use database constraints for
+  invariants that must survive concurrent writes and transactions for related
+  writes that must succeed together. Avoid hidden side effects in signals.
+- Use Wagtail's page, snippet, StreamField, and admin extension APIs rather than
+  bypassing its content lifecycle. Consider editor panels, help text, validation,
+  allowed parent/child pages, and template rendering when adding content types.
+- Preserve revisions, drafts, previews, publishing, scheduling, workflows,
+  permissions, and localization where the feature uses them. Public queries must
+  respect publication and access restrictions; do not expose drafts or private
+  content through custom views or APIs.
+- Treat StreamField block names and stored values as persisted content contracts.
+  Plan content migrations for renames, removals, or structural changes. Test
+  rendering of both existing and newly created content.
+- Keep business logic and database queries out of templates. Use Django escaping
+  and Wagtail's supported rich-text and image rendering tools; do not mark
+  untrusted content safe. Preserve semantic HTML, labels, keyboard access, and
+  appropriate alternative text when changing templates or editor interfaces.
+
+# Database changes
+
+- Create and include Django migrations whenever model state changes. Inspect
+  generated operations and check that no migrations are missing.
+- Consider existing rows before adding required fields, uniqueness constraints,
+  or changing types. Split schema and data changes when needed to preserve data.
+- Use historical models from the migration app registry in data migrations.
+  Consider reversibility and document intentionally irreversible operations.
+  Do not rewrite migrations already shared or applied elsewhere.
+- Verify relevant migrations against the selected database and test data
+  transformations. Avoid relying on SQLite-only behaviour for another database.
+{% if database == "sqlite3" %}- The local SQLite database is `db.sqlite3`; do not commit it.
+{% else %}- The project uses `{{ database }}`. Preserve its Compose configuration and
+  database-specific settings when changing the backend.
+{% endif %}- Stop containers with `docker compose down`. Do not delete database files,
+  drop databases, flush data, or run `docker compose down --volumes` without
+  explicit user authorization for that data reset. Never use production data
+  or production credentials for development tests.
+
+# Security and performance
+
+- Keep secrets, `.env`, database files, and uploaded media out of version control.
+  Read deployment values from the environment; preserve secure production
+  settings and do not disable CSRF, authentication, or authorization to fix tests.
+- Enforce permissions server-side for custom views, APIs, admin actions, and
+  object access. Validate input and uploads, use ORM parameterization, and avoid
+  logging credentials or sensitive content.
+- Consider query counts for page listings, StreamField rendering, and related
+  objects. Use `select_related`/`prefetch_related` where appropriate, paginate
+  unbounded lists, and add query-count tests for relevant performance fixes.
+- Introduce caching only with a clear invalidation strategy that respects
+  publication state, permissions, and localization where applicable.
