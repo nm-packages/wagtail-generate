@@ -1,4 +1,8 @@
-# Repository guidance
+# AI agent instructions
+
+This file provides instructions for AI agents. Developer-facing guidance belongs
+in [docs/development.md](docs/development.md); keep it current when repository
+conventions change. Do not direct developers to this file as documentation.
 
 ## Purpose
 
@@ -7,6 +11,10 @@ creates opinionated Wagtail CMS projects from named codebase layouts.
 
 ## Tooling
 
+- Create a new branch before making changes; do not work directly on `main`.
+  Name branches `<work-type>/<short-description>`, using a prefix that reflects
+  the work, such as `feature/`, `docs/`, `testing/`, `fix/`, or `refactor/`.
+  For example, use `docs/simplify-documentation` for documentation changes.
 - Use UV for Python versions, dependency management, virtual environments, and
   command execution.
 - Keep application code under `src/wagtail_generate/` and tests under `tests/`.
