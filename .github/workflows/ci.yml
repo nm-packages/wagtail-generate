@@ -1,0 +1,51 @@
+name: Verification
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: latest
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Validate lockfile
+        run: uv lock --check
+
+      - name: Check lint
+        run: uv run ruff check .
+
+      - name: Check formatting
+        run: uv run ruff format --check .
+
+      - name: Run type checks
+        run: uv run mypy
+
+      - name: Run tests
+        run: uv run pytest
+
+      - name: Run installed-distribution smoke test
+        env:
+          WAGTAIL_GENERATE_TEST_DISTRIBUTION: "1"
+        run: uv run pytest tests/test_distribution.py
+
+      - name: Build source distribution and wheel
+        run: uv build

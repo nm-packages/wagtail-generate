@@ -24,6 +24,15 @@ uv run mypy
 uv run pytest
 ```
 
+Pull requests and pushes to `main` run the same checks in GitHub Actions. The
+workflow also builds the source distribution and wheel and runs the installed
+distribution smoke test. The smoke test is opt-in locally because it creates an
+isolated environment and may need network access:
+
+```shell
+WAGTAIL_GENERATE_TEST_DISTRIBUTION=1 uv run pytest tests/test_distribution.py
+```
+
 Run all hooks with `uv run pre-commit run --all-files`. The pytest hook runs the
 full suite on every commit, including template-only and configuration-only
 changes. Verify a specific changed-file selection with
