@@ -509,3 +509,34 @@ def test_nested_subfolder_keeps_base_directory_at_project_root(
     assert 'INSTALLED_APPS = ["sites.example.home", "sites.example.search"]' in (
         settings
     )
+
+
+def test_flatten_preserves_unrelated_django_identifiers(
+    tmp_path: Path,
+) -> None:
+    generated_directory = tmp_path / "src"
+    package_directory = generated_directory / "models"
+    package_directory.mkdir(parents=True)
+    (package_directory / "__init__.py").write_text("")
+    (generated_directory / "models.py").write_text(
+        "from django.db import models\n\n"
+        "class Example(models.Model):\n"
+        "    title = models.CharField(max_length=50)\n"
+    )
+    settings_directory = package_directory / "settings"
+    settings_directory.mkdir()
+    (settings_directory / "base.py").write_text(
+        "from pathlib import Path\n"
+        "PROJECT_DIR = Path(__file__).resolve().parent.parent\n"
+        "BASE_DIR = PROJECT_DIR.parent\n"
+        'INSTALLED_APPS = ["home"]\n'
+    )
+    home_directory = generated_directory / "home"
+    home_directory.mkdir()
+    (home_directory / "apps.py").write_text('    name = "home"\n')
+
+    assert _flatten_project_package(generated_directory, "models", "src")
+    content = (generated_directory / "models.py").read_text()
+    assert "models.Model" in content
+    assert "models.CharField" in content
+    assert "src.Model" not in content
