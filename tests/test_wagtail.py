@@ -10,8 +10,63 @@ import pytest
 from wagtail_generate.wagtail import (
     _flatten_project_package,
     latest_stable_python_version,
+    resolve_dependencies,
     run_wagtail_start,
 )
+
+
+@pytest.fixture(autouse=True)
+def stub_dependency_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep command-order tests focused on execution after planning."""
+    monkeypatch.setattr(
+        "wagtail_generate.wagtail.resolve_dependencies",
+        lambda database, python_version: (
+            ("wagtail", "ruff", "djangofmt", "pre-commit")
+            if database == "sqlite3"
+            else (
+                "wagtail",
+                "psycopg[binary]" if database == "postgresql" else "mysqlclient",
+                "ruff",
+                "djangofmt",
+                "pre-commit",
+            )
+        ),
+    )
+
+
+@patch("wagtail_generate.wagtail.subprocess.run")
+def test_resolve_dependencies_returns_pinned_direct_requirements(run: Mock) -> None:
+    run.return_value = subprocess.CompletedProcess(
+        [],
+        returncode=0,
+        stdout=(
+            "anyascii==0.3.3\n"
+            "djangofmt==1.0.0\n"
+            "pre-commit==4.6.2\n"
+            "ruff==0.12.0\n"
+            "wagtail==7.2.1\n"
+            "psycopg[binary]==3.2.9\n"
+        ),
+        stderr="",
+    )
+
+    assert resolve_dependencies("postgresql", "3.14") == (
+        "wagtail==7.2.1",
+        "psycopg[binary]==3.2.9",
+        "ruff==0.12.0",
+        "djangofmt==1.0.0",
+        "pre-commit==4.6.2",
+    )
+
+
+@patch("wagtail_generate.wagtail.subprocess.run")
+def test_resolve_dependencies_reports_resolution_failure(run: Mock) -> None:
+    run.return_value = subprocess.CompletedProcess(
+        [], returncode=1, stdout="", stderr="no matching distribution"
+    )
+
+    with pytest.raises(RuntimeError, match="no matching distribution"):
+        resolve_dependencies("sqlite3", "3.14")
 
 
 @pytest.mark.parametrize("subfolder", [Path("../outside"), Path("/absolute")])

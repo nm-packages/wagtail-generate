@@ -5,6 +5,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -28,6 +29,7 @@ ROOT_FILES = (".dockerignore", "Dockerfile", "manage.py")
 UV_VERSION = "0.12.7"
 UV_COMMAND = ("uvx", f"uv@{UV_VERSION}")
 Database = Literal["sqlite3", "postgresql", "mysql"]
+DependencyResolver = Callable[[Database, str], tuple[str, ...]]
 
 
 class GenerationError(RuntimeError):
@@ -82,6 +84,7 @@ class GenerationPlan:
     formatting_commands: tuple[CommandPlan, ...]
     developer_tooling: DeveloperToolingPlan
     documentation_files: tuple[RenderedFile, ...]
+    resolved_dependencies: tuple[str, ...]
 
 
 def run_wagtail_start(
@@ -93,6 +96,7 @@ def run_wagtail_start(
     template: Path | None = None,
     layout: Layout = STANDARD_LAYOUT,
     allow_playground: bool = False,
+    dependency_resolver: DependencyResolver | None = None,
 ) -> int:
     """Initialize a UV project, install Wagtail, and generate into that project."""
     project_directory = (project_root or Path.cwd()).resolve()
@@ -131,7 +135,12 @@ def run_wagtail_start(
         python_version = latest_stable_python_version(
             _nearest_existing_directory(project_directory)
         )
-        plan = build_generation_plan(options, python_version)
+        resolver = dependency_resolver or resolve_dependencies
+        plan = build_generation_plan(
+            options,
+            python_version,
+            resolver(options.database, python_version),
+        )
     except (RuntimeError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
@@ -170,6 +179,7 @@ def _validate_generation_boundary(
 def build_generation_plan(
     options: ProjectOptions,
     python_version: str,
+    resolved_dependencies: tuple[str, ...] | None = None,
 ) -> GenerationPlan:
     """Render and validate every generator-owned action before writing files."""
     validate_source_package(options.settings_module.partition(".")[0])
@@ -177,6 +187,13 @@ def build_generation_plan(
     driver = database_driver(options.database)
     if driver is not None:
         runtime_dependencies.append(driver)
+    if resolved_dependencies is None:
+        resolved_dependencies = tuple(
+            runtime_dependencies + ["ruff", "djangofmt", "pre-commit"]
+        )
+    runtime_count = len(runtime_dependencies)
+    runtime_dependencies = list(resolved_dependencies[:runtime_count])
+    development_dependencies = list(resolved_dependencies[runtime_count:])
 
     setup_commands = (
         CommandPlan(
@@ -195,7 +212,7 @@ def build_generation_plan(
         # Console scripts must keep working after the staged project is moved.
         CommandPlan((*UV_COMMAND, "venv", "--relocatable", "--python", python_version)),
         CommandPlan((*UV_COMMAND, "add", *runtime_dependencies)),
-        CommandPlan((*UV_COMMAND, "add", "--dev", "ruff", "djangofmt", "pre-commit")),
+        CommandPlan((*UV_COMMAND, "add", "--dev", *development_dependencies)),
     )
 
     wagtail_arguments = [
@@ -289,7 +306,50 @@ def build_generation_plan(
         formatting_commands=formatting_commands,
         developer_tooling=tooling,
         documentation_files=documentation_files,
+        resolved_dependencies=resolved_dependencies,
     )
+
+
+def resolve_dependencies(database: Database, python_version: str) -> tuple[str, ...]:
+    """Resolve direct dependencies before any generation side effects."""
+    requirements = ["wagtail"]
+    driver = database_driver(database)
+    if driver is not None:
+        requirements.append(driver)
+    requirements.extend(("ruff", "djangofmt", "pre-commit"))
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".in") as source:
+        source.write("\n".join(requirements) + "\n")
+        source.flush()
+        result = subprocess.run(
+            [
+                *UV_COMMAND,
+                "pip",
+                "compile",
+                source.name,
+                "--python-version",
+                python_version,
+                "--no-annotate",
+                "--no-header",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or "UV could not resolve dependencies"
+        raise RuntimeError(detail)
+    resolved = tuple(
+        line.strip()
+        for line in result.stdout.splitlines()
+        if line.strip() and not line.startswith("#")
+    )
+    direct = tuple(
+        next(line for line in resolved if line.lower().startswith(name.lower() + "=="))
+        for name in requirements
+    )
+    if len(direct) != len(requirements):
+        raise ValueError("UV did not resolve every direct dependency")
+    return direct
 
 
 def execute_generation_plan(plan: GenerationPlan) -> int:
