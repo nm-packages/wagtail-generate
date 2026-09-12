@@ -502,11 +502,17 @@ def _flatten_project_package(
             package_marker.write_text("")
         parent_directory = parent_directory.parent
 
-    old_prefix = f"{project_name}."
     new_prefix = f"{destination_module}."
     for python_file in generated_directory.rglob("*.py"):
         content = python_file.read_text()
-        updated = content.replace(old_prefix, new_prefix)
+        # Rewrite only import paths and quoted settings-module references. A
+        # global replacement would corrupt identifiers such as ``models.Model``
+        # when the project itself is named ``models``.
+        updated = re.sub(
+            rf'(?P<prefix>\b(?:from|import)\s+|["\']){re.escape(project_name)}\.',
+            rf"\g<prefix>{new_prefix}",
+            content,
+        )
         for app_name in ("home", "search"):
             for suffix in (" ", "."):
                 updated = updated.replace(
