@@ -129,12 +129,20 @@ def write_mock_wagtail_project(project_root: Path) -> None:
     (package_directory / "urls.py").write_text("")
     home_directory = site_directory / "home"
     home_directory.mkdir()
-    (home_directory / "apps.py").write_text('    name = "home"')
-    (home_directory / "tests.py").write_text("from home.models import HomePage")
+    (home_directory / "apps.py").write_text(
+        "from django.apps import AppConfig\n\n"
+        "class HomeConfig(AppConfig):\n"
+        '    name = "home"\n'
+    )
+    (home_directory / "tests.py").write_text("from home.models import HomePage\n")
     migrations = home_directory / "migrations"
     migrations.mkdir()
     (migrations / "0002_create_homepage.py").write_text(
-        'HomePage = apps.get_model("home.HomePage")'
+        "from django.db import migrations\n\n"
+        "def forwards(apps, schema_editor):\n"
+        '    apps.get_model("home", "HomePage")\n\n'
+        "class Migration(migrations.Migration):\n"
+        "    operations = [migrations.RunPython(forwards)]\n"
     )
 
 
@@ -233,11 +241,13 @@ def test_run_wagtail_start_streams_native_command(
     assert '"ENGINE": "django.db.backends.postgresql"' in settings
     assert '"django.contrib.postgres"' in settings
     assert 'os.environ.get("DATABASE_HOST", "127.0.0.1")' in settings
-    assert (home_directory / "apps.py").read_text() == '    name = "src.home"'
+    assert 'name = "src.home"' in (home_directory / "apps.py").read_text()
     assert (home_directory / "tests.py").read_text() == (
-        "from src.home.models import HomePage"
+        "from src.home.models import HomePage\n"
     )
-    assert migration.read_text() == 'HomePage = apps.get_model("home.HomePage")'
+    assert 'apps.get_model("home", "HomePage")' in migration.read_text()
+    for python_file in site_directory.rglob("*.py"):
+        compile(python_file.read_text(), str(python_file), "exec")
     generation_directory = run.call_args_list[0].kwargs["cwd"]
     assert generation_directory.parent == tmp_path
     assert run.call_args_list == [
