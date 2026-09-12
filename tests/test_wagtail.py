@@ -14,6 +14,37 @@ from wagtail_generate.wagtail import (
 )
 
 
+@pytest.mark.parametrize("subfolder", [Path("../outside"), Path("/absolute")])
+@patch("wagtail_generate.wagtail.subprocess.run")
+def test_generation_boundary_rejects_escaping_subfolders(
+    run: Mock, subfolder: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert (
+        run_wagtail_start(
+            "example", project_root=tmp_path / "site", site_subfolder=subfolder
+        )
+        == 2
+    )
+    assert "site subfolder must be relative" in capsys.readouterr().err
+    run.assert_not_called()
+
+
+@patch("wagtail_generate.wagtail.subprocess.run")
+def test_generation_boundary_rejects_source_checkout(
+    run: Mock,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    checkout = tmp_path / "checkout"
+    monkeypatch.setattr(
+        "wagtail_generate.wagtail.source_checkout_root", lambda: checkout
+    )
+    assert run_wagtail_start("example", project_root=checkout / "generated") == 2
+    assert "source checkout" in capsys.readouterr().err
+    run.assert_not_called()
+
+
 @pytest.mark.parametrize(
     ("project_name", "subfolder"),
     [("site", None), ("example", Path("site")), ("example", Path("json/cms"))],
