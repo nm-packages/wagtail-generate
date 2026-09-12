@@ -55,10 +55,10 @@ def test_mysql_settings_and_tooling_are_consistent(tmp_path: Path) -> None:
     makefile = (tmp_path / "Makefile").read_text()
     assert "dev: ## Run Wagtail locally" in makefile
     assert "docker compose up -d --wait db" in makefile
-    assert "-include .env" in makefile
-    assert "DATABASE_HOST=127.0.0.1 uv run python manage.py migrate" in makefile
+    assert "-include .env" not in makefile
+    assert "uv run $(LOCAL_ENV) python manage.py migrate" in makefile
     assert "uv run python scripts/check_django_templates.py" in makefile
-    assert "uv run python manage.py runserver" in makefile
+    assert "uv run $(LOCAL_ENV) python manage.py runserver" in makefile
     assert "check: lint test" in makefile
     assert "docker compose build --pull" in makefile
     assert 'target-version = "py314"' in (tmp_path / "pyproject.toml").read_text()

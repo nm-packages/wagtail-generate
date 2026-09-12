@@ -2,8 +2,8 @@
 
 .PHONY: help sync{% if database != "sqlite3" %} database{% endif %} migrate dev docker stop superuser lint test check
 {% if database != "sqlite3" %}
--include .env
-export
+# Let UV parse dotenv values; never include credentials as Make syntax.
+LOCAL_ENV := $(if $(wildcard .env),--env-file .env)
 {% endif %}
 
 help: ## Show the available commands
@@ -16,13 +16,13 @@ database: ## Start the local database container
 	docker compose up -d --wait db
 {% endif %}
 migrate: ## Apply Django database migrations
-	{% if database != "sqlite3" %}DATABASE_HOST=127.0.0.1 {% endif %}uv run python manage.py migrate
+	uv run{% if database != "sqlite3" %} $(LOCAL_ENV){% endif %} python manage.py migrate
 
 dev: ## Run Wagtail locally
 {% if database != "sqlite3" %}	docker compose up -d --wait db
 {% endif %}	uv sync
-	{% if database != "sqlite3" %}DATABASE_HOST=127.0.0.1 {% endif %}uv run python manage.py migrate
-	{% if database != "sqlite3" %}DATABASE_HOST=127.0.0.1 {% endif %}uv run python manage.py runserver
+	uv run{% if database != "sqlite3" %} $(LOCAL_ENV){% endif %} python manage.py migrate
+	uv run{% if database != "sqlite3" %} $(LOCAL_ENV){% endif %} python manage.py runserver
 
 docker: ## Build and run the complete development environment
 	docker compose build --pull
@@ -32,7 +32,7 @@ stop: ## Stop the development containers
 	docker compose down
 
 superuser: ## Create a Wagtail administrator locally
-	{% if database != "sqlite3" %}DATABASE_HOST=127.0.0.1 {% endif %}uv run python manage.py createsuperuser
+	uv run{% if database != "sqlite3" %} $(LOCAL_ENV){% endif %} python manage.py createsuperuser
 
 lint: ## Check Python and Django-template formatting
 	uv run ruff check .
@@ -40,6 +40,6 @@ lint: ## Check Python and Django-template formatting
 	uv run python scripts/check_django_templates.py
 
 test: ## Run the Django test suite
-	{% if database != "sqlite3" %}DATABASE_HOST=127.0.0.1 {% endif %}uv run python manage.py test
+	uv run{% if database != "sqlite3" %} $(LOCAL_ENV){% endif %} python manage.py test
 
 check: lint test ## Run all quality checks
