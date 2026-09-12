@@ -24,7 +24,12 @@ uv run mypy
 uv run pytest
 ```
 
-Run all hooks with `uv run pre-commit run --all-files`. Add or update tests for
+Run all hooks with `uv run pre-commit run --all-files`. The pytest hook runs the
+full suite on every commit, including template-only and configuration-only
+changes. Verify a specific changed-file selection with
+`uv run pre-commit run pytest --files <path>`.
+
+Add or update tests for
 behavior changes, especially path validation, conflicts, layout selection,
 rendered content, and command exit codes. For an editable CLI installation, use
 `uv tool install --editable .`.
