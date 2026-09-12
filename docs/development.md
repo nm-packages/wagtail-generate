@@ -34,6 +34,21 @@ behavior changes, especially path validation, conflicts, layout selection,
 rendered content, and command exit codes. For an editable CLI installation, use
 `uv tool install --editable .`.
 
+## Release artifact checks
+
+The project uses the MIT license in `LICENSE`. Release archives must include its
+full text and copyright notice, with matching package metadata.
+
+Run the artifact check with:
+
+```shell
+WAGTAIL_GENERATE_TEST_DISTRIBUTION=1 uv run pytest tests/test_distribution.py
+```
+
+This builds a source distribution in a temporary directory, builds a wheel from
+that source archive, and verifies both license copies and metadata. It may need
+network access to install the build backend, so the ordinary test suite skips it.
+
 ## Disposable playground
 
 Rebuild a SQLite site from the current generator source, install dependencies,
