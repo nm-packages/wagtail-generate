@@ -30,6 +30,15 @@ UV_COMMAND = ("uvx", f"uv@{UV_VERSION}")
 Database = Literal["sqlite3", "postgresql", "mysql"]
 
 
+class GenerationError(RuntimeError):
+    """An expected operational failure while generating a project."""
+
+    def __init__(self, stage: str, message: str, returncode: int | None = None) -> None:
+        super().__init__(message)
+        self.stage = stage
+        self.returncode = returncode
+
+
 @dataclass(frozen=True)
 class ProjectOptions:
     """Validated user choices that determine a generated project."""
@@ -285,19 +294,26 @@ def build_generation_plan(
 
 def execute_generation_plan(plan: GenerationPlan) -> int:
     """Execute a plan in staging and publish it only after complete success."""
-    project_directory = plan.options.project_root
-    staging_parent = _nearest_existing_directory(project_directory.parent)
-    with tempfile.TemporaryDirectory(
-        dir=staging_parent,
-        prefix=f".{project_directory.name}-",
-    ) as temporary_directory:
-        staging_directory = Path(temporary_directory)
-        result = _execute_generation_plan_in_directory(plan, staging_directory)
-        if result != 0:
-            return result
-        if not _publish_generated_project(staging_directory, project_directory):
-            return 2
-    return 0
+    try:
+        project_directory = plan.options.project_root
+        staging_parent = _nearest_existing_directory(project_directory.parent)
+        with tempfile.TemporaryDirectory(
+            dir=staging_parent,
+            prefix=f".{project_directory.name}-",
+        ) as temporary_directory:
+            staging_directory = Path(temporary_directory)
+            result = _execute_generation_plan_in_directory(plan, staging_directory)
+            if result != 0:
+                return result
+            if not _publish_generated_project(staging_directory, project_directory):
+                return 2
+        return 0
+    except GenerationError as error:
+        print(f"error: {error.stage}: {error}", file=sys.stderr)
+        return error.returncode or 2
+    except (OSError, ValueError) as error:
+        print(f"error: generation: {error}", file=sys.stderr)
+        return 2
 
 
 def _execute_generation_plan_in_directory(
@@ -308,11 +324,7 @@ def _execute_generation_plan_in_directory(
     options = plan.options
 
     for command in plan.setup_commands:
-        result = subprocess.run(
-            list(command.arguments),
-            cwd=project_directory,
-            check=False,
-        )
+        result = _run_generation_command(command, project_directory, "setup")
         if result.returncode != 0:
             return result.returncode
 
@@ -322,11 +334,7 @@ def _execute_generation_plan_in_directory(
             exist_ok=True,
         )
 
-    result = subprocess.run(
-        list(plan.wagtail_command.arguments),
-        cwd=project_directory,
-        check=False,
-    )
+    result = _run_generation_command(plan.wagtail_command, project_directory, "wagtail")
     if result.returncode != 0:
         return result.returncode
 
@@ -369,15 +377,23 @@ def _execute_generation_plan_in_directory(
     write_rendered_files(project_directory, plan.documentation_files)
 
     for command in plan.formatting_commands:
-        result = subprocess.run(
-            list(command.arguments),
-            cwd=project_directory,
-            check=False,
-        )
+        result = _run_generation_command(command, project_directory, "formatting")
         if result.returncode != 0:
             return result.returncode
 
     return 0
+
+
+def _run_generation_command(
+    command: CommandPlan, project_directory: Path, stage: str
+) -> subprocess.CompletedProcess[bytes]:
+    """Run one command and translate missing executables into a stage error."""
+    try:
+        return subprocess.run(
+            list(command.arguments), cwd=project_directory, check=False
+        )
+    except OSError as error:
+        raise GenerationError(stage, str(error)) from error
 
 
 def _publish_generated_project(staging_directory: Path, destination: Path) -> bool:

@@ -178,7 +178,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         default_site_name = display_site_name(project_name)
         if arguments.site_name is None:
-            site_name = prompt_for_site_name(default_site_name)
+            try:
+                site_name = prompt_for_site_name(default_site_name)
+            except EOFError:
+                print("error: site name is required; use --site-name", file=sys.stderr)
+                return 2
         else:
             try:
                 site_name = validate_site_name(arguments.site_name)
@@ -247,7 +251,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
                     return 2
         else:
-            site_subfolder = prompt_for_site_subfolder(project_name)
+            try:
+                site_subfolder = prompt_for_site_subfolder(project_name)
+            except EOFError:
+                print(
+                    "error: source location is required; use --site-directory",
+                    file=sys.stderr,
+                )
+                return 2
 
         template = arguments.template
         if template is not None:
