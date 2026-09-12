@@ -18,7 +18,11 @@ from wagtail_generate.developer_tools import (
 )
 from wagtail_generate.layouts import STANDARD_LAYOUT, Layout
 from wagtail_generate.rendering import RenderedFile, plan_template, write_rendered_files
-from wagtail_generate.safety import validate_source_package
+from wagtail_generate.safety import (
+    destination_is_in_source_checkout,
+    source_checkout_root,
+    validate_source_package,
+)
 
 ROOT_FILES = (".dockerignore", "Dockerfile", "manage.py")
 UV_VERSION = "0.12.7"
@@ -79,6 +83,7 @@ def run_wagtail_start(
     site_subfolder: Path | None = None,
     template: Path | None = None,
     layout: Layout = STANDARD_LAYOUT,
+    allow_playground: bool = False,
 ) -> int:
     """Initialize a UV project, install Wagtail, and generate into that project."""
     project_directory = (project_root or Path.cwd()).resolve()
@@ -91,6 +96,12 @@ def run_wagtail_start(
         template=template,
         layout=layout,
     )
+
+    try:
+        _validate_generation_boundary(options, allow_playground=allow_playground)
+    except ValueError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
 
     if site_subfolder is not None:
         conflicts = [
@@ -117,6 +128,34 @@ def run_wagtail_start(
         return 2
 
     return execute_generation_plan(plan)
+
+
+def _validate_generation_boundary(
+    options: ProjectOptions,
+    *,
+    allow_playground: bool = False,
+) -> None:
+    """Validate paths and option invariants before any side effects."""
+    if options.site_subfolder is not None:
+        if options.site_subfolder.is_absolute() or ".." in options.site_subfolder.parts:
+            raise ValueError(
+                "site subfolder must be relative and stay inside the project root"
+            )
+        if options.site_subfolder == Path("."):
+            raise ValueError("site subfolder must name a directory or be omitted")
+    checkout = source_checkout_root()
+    if (
+        checkout is not None
+        and destination_is_in_source_checkout(options.project_root, checkout)
+        and not (
+            allow_playground
+            and options.project_root == (checkout / ".playground").resolve()
+        )
+    ):
+        raise ValueError(
+            "refusing to generate inside the wagtail-generate source checkout"
+        )
+    validate_source_package(options.settings_module.partition(".")[0])
 
 
 def build_generation_plan(

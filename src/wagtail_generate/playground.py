@@ -62,6 +62,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             project_root=destination,
             database="sqlite3",
             site_subfolder=(Path("src") if arguments.site_directory == "src" else None),
+            allow_playground=True,
         )
         if result:
             return result
