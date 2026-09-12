@@ -49,6 +49,46 @@ def test_sqlite_readme_quick_start_does_not_require_env_file() -> None:
     assert "cp .env.example .env" not in quick_start
 
 
+@pytest.mark.parametrize("database", ["sqlite3", "postgresql", "mysql"])
+@pytest.mark.parametrize("source_directory", [".", "src"])
+def test_readme_documents_administrator_creation_for_each_workflow(
+    database: str, source_directory: str
+) -> None:
+    content = render_template(
+        "README.md.jinja",
+        {
+            "site_name": "Example",
+            "project_name": "example",
+            "layout": "standard",
+            "source_directory": source_directory,
+            "settings_module": (
+                "example.settings" if source_directory == "." else "src.settings"
+            ),
+            "database": database,
+            "database_name": database,
+            "python_version": "3.14",
+        },
+    )
+
+    quick_start = content.split("## Quick start", 1)[1].split("## Docker setup", 1)[0]
+    local_setup = content.split("## Local UV setup", 1)[1].split(
+        "## Quality checks", 1
+    )[0]
+    for section in (quick_start, local_setup):
+        assert "make superuser" in section
+        assert "http://localhost:8000/admin/" in section
+        assert "another terminal" in section
+        assert "project root" in section
+        assert "docker compose" not in section
+        assert section.index("make dev") < section.index("make superuser")
+
+    docker_setup = content.split("## Docker setup", 1)[1].split("## Local UV setup", 1)[
+        0
+    ]
+    assert "docker compose exec web python manage.py createsuperuser" in docker_setup
+    assert "make superuser" not in docker_setup
+
+
 def test_write_template_renders_content_and_applies_mode(tmp_path: Path) -> None:
     destination = tmp_path / "Dockerfile"
 

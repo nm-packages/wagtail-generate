@@ -27,7 +27,16 @@ dependencies, apply migrations, and run Wagtail locally:
 {% endif %}make dev
 ```
 
-The site is available at <http://localhost:8000>. Stop the local server with
+The site is available at <http://localhost:8000>. In another terminal, from the
+project root, create an administrator and follow the prompts:
+
+```shell
+make superuser
+```
+
+Visit <http://localhost:8000/admin/> and sign in with the account you created.
+
+Stop the local server with
 Ctrl-C.{% if database != "sqlite3" %} Run `make stop` when you also want to stop
 the database container.{% endif %} Run `make help` to see all available
 development commands.
@@ -75,6 +84,9 @@ and run Django locally:
 ```shell
 make dev
 ```
+
+For a new site, run `make superuser` in another terminal from the project root,
+then sign in at <http://localhost:8000/admin/>.
 
 {% if database == "sqlite3" %}SQLite data is stored in `db.sqlite3` in the project root.
 {%- else %}The settings default to the database exposed on `127.0.0.1`. Override
