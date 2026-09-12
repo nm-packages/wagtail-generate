@@ -33,10 +33,14 @@ its dependencies or system packages change; sync the container environment from
 the lockfile when dependencies change.
 
 For the user-selected local workflow, run `make sync` first.
-{% if database != "sqlite3" %}Start the database with `make database`. Use `DATABASE_HOST=127.0.0.1` for local
-Django commands and the credentials/port configured in `.env`; Make targets load
-that file, but direct shell commands require those variables in the environment.
-{% endif %}Replace `docker compose run --rm web uv run` with `uv run` for local
+{% if database != "sqlite3" %}For the bundled database, run `make database`; skip this for an external
+server. Local Django commands honour the host, credentials, and port in `.env`,
+with exported shell variables taking precedence. The default host is `127.0.0.1`.
+Make targets load `.env` through UV when present; Compose loads it independently.
+Use single quotes for literal credentials containing `$`, `#`, or spaces.
+Use the README's external-database workflow instead of `make dev` for an external
+server, because `make dev` starts the bundled database container.
+{% endif %}Replace `docker compose run --rm web uv run` with `uv run{% if database != "sqlite3" %} --env-file .env{% endif %}` for local
 checks in [checks.md](checks.md). `make dev` runs locally and applies migrations;
 `make check` runs local lint/format checks and tests, but does not include the
 explicit system and

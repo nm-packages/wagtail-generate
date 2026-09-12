@@ -34,6 +34,11 @@ behavior changes, especially path validation, conflicts, layout selection,
 rendered content, and command exit codes. For an editable CLI installation, use
 `uv tool install --editable .`.
 
+The database-environment tests execute generated Make targets with real UV and
+inspect Compose configuration without starting containers. Compose checks skip
+when Docker Compose is unavailable; install it to run the full environment
+coverage with `uv run pytest tests/test_database_environment.py`.
+
 ## Release artifact checks
 
 The project uses the MIT license in `LICENSE`. Release archives must include its

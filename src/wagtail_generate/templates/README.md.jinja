@@ -91,7 +91,27 @@ then sign in at <http://localhost:8000/admin/>.
 {% if database == "sqlite3" %}SQLite data is stored in `db.sqlite3` in the project root.
 {%- else %}The settings default to the database exposed on `127.0.0.1`. Override
 `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_HOST`, and
-`DATABASE_PORT` when needed.
+`DATABASE_PORT` in `.env` when needed. Exported shell variables take precedence
+for both local UV commands and Docker Compose. Use single quotes for literal
+values containing dollar signs, hash characters, or spaces, for example:
+
+```dotenv
+DATABASE_PASSWORD='cost$5#demo with spaces'
+```
+
+Local Make targets load `.env` through UV when the file exists; otherwise Django
+uses exported variables or its defaults. Compose reads `.env` itself and uses
+`db` with the internal database port for its web service.
+
+`make dev` starts the bundled database container. To use an existing external
+database, configure its host, port, and credentials in `.env`, then run:
+
+```shell
+make sync migrate
+uv run --env-file .env python manage.py runserver
+```
+
+`make superuser` and `make test` also honour those settings.
 {%- endif %}
 
 ## Quality checks
@@ -120,13 +140,14 @@ test suite. Also check the lockfile, system configuration, and missing migration
 ```shell
 make check
 uv lock --check
-{% if database != "sqlite3" %}DATABASE_HOST=127.0.0.1 {% endif %}uv run python manage.py check
-{% if database != "sqlite3" %}DATABASE_HOST=127.0.0.1 {% endif %}uv run python manage.py makemigrations --check --dry-run
+uv run{% if database != "sqlite3" %} --env-file .env{% endif %} python manage.py check
+uv run{% if database != "sqlite3" %} --env-file .env{% endif %} python manage.py makemigrations --check --dry-run
 ```
 
-{% if database != "sqlite3" %}Start the database with `make database` first. Direct local Django commands need
-the database credentials and port from `.env` exported in your shell; the Make
-targets load `.env` themselves.
+{% if database != "sqlite3" %}For the bundled database, run `make database` first. Direct local Django
+commands use `uv run --env-file .env` to load the same settings as Make targets.
+Omit `--env-file .env` if all settings are supplied through exported variables
+or defaults and no `.env` file exists.
 
 {% endif %}The Git hooks below run on the host using UV, including during Docker development.
 

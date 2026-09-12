@@ -151,7 +151,8 @@ def test_agent_guidance_matches_generated_environment(
     else:
         assert "`db.sqlite3`" not in content
         assert "make database" in content
-        assert "DATABASE_HOST=127.0.0.1" in content
+        assert "uv run --env-file .env" in content
+        assert "exported shell variables taking precedence" in content
         assert f"project uses `{database}`" in content
 
 
