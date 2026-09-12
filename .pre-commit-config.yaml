@@ -31,5 +31,5 @@ repos:
         name: Pytest
         entry: uv run pytest
         language: system
-        types: [python]
+        always_run: true
         pass_filenames: false
