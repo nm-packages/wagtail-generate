@@ -31,6 +31,11 @@ Run `wagtail-generate start --help` for all flags and defaults. Running
 
 - `--site-name "My Site"` sets the readable name and default folder (`my_site`).
   The positional name (`mysite`) determines the Python package.
+  Explicit site names preserve capitalization, punctuation, Unicode, and internal
+  spaces; surrounding whitespace is trimmed. Names must be nonempty after
+  trimming and contain no control characters, such as embedded tabs or newlines.
+  At the prompt, press Enter to accept the suggestion derived from the package
+  name. Invalid input prompts again; invalid flag values exit with an error.
 - `--directory PATH` overrides the destination, which must be missing or empty
   and outside the generator checkout.
 - `--site-directory .` puts Wagtail code at the root; `--site-directory src`

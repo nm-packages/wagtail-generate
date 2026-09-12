@@ -45,8 +45,22 @@ def prompt_for_site_name(
 ) -> str:
     """Ask for the human-facing Wagtail site name."""
     read_input = input_fn or input
-    value = read_input(f"Site name [{default_name}]: ").strip()
-    return display_site_name(value or default_name)
+    while True:
+        value = read_input(f"Site name [{default_name}]: ")
+        try:
+            return validate_site_name(default_name if value == "" else value)
+        except ValueError as error:
+            print(f"Invalid site name: {error}")
+
+
+def validate_site_name(value: str) -> str:
+    """Trim a display name while preserving its spelling and punctuation."""
+    name = value.strip()
+    if not name:
+        raise ValueError("site name cannot be empty")
+    if any(unicodedata.category(character) == "Cc" for character in name):
+        raise ValueError("site name cannot contain control characters")
+    return name
 
 
 def normalize_subfolder(value: str) -> Path:
@@ -162,13 +176,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         if project_name != arguments.project_name:
             print(f"Using Python project name: {project_name}")
 
-        default_site_name = display_site_name(arguments.project_name)
+        default_site_name = display_site_name(project_name)
         if arguments.site_name is None:
             site_name = prompt_for_site_name(default_site_name)
         else:
-            site_name = display_site_name(arguments.site_name)
-            if not site_name:
-                print("error: --site-name cannot be empty", file=sys.stderr)
+            try:
+                site_name = validate_site_name(arguments.site_name)
+            except ValueError as error:
+                print(f"error: --site-name: {error}", file=sys.stderr)
                 return 2
 
         project_root = arguments.directory

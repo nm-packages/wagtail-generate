@@ -424,10 +424,10 @@ def test_display_site_name_removes_package_separators() -> None:
 def test_site_name_is_prompted_separately() -> None:
     site_name = prompt_for_site_name(
         "Src",
-        input_fn=lambda _: "Droitwich heritage centre",
+        input_fn=lambda _: "Example heritage centre",
     )
 
-    assert site_name == "Droitwich Heritage Centre"
+    assert site_name == "Example heritage centre"
 
 
 def test_site_name_prompt_accepts_default() -> None:
@@ -477,7 +477,7 @@ def test_start_uses_normalized_project_name(
     assert "Using Python project name: this_is_my_site" in capsys.readouterr().out
     run_start.assert_called_once_with(
         project_name="this_is_my_site",
-        site_name="Editorial Website",
+        site_name="Editorial website",
         database="mysql",
         project_root=tmp_path,
         site_subfolder=None,
@@ -550,3 +550,107 @@ def test_start_refuses_nonempty_project_root(
     assert ".hidden-file" in error
     find_checkout.assert_called_once_with()
     run_start.assert_not_called()
+
+
+@pytest.mark.parametrize("prompted", [False, True])
+@pytest.mark.parametrize(
+    "name", ["EXAMPLE's iWidget eShop", "my-site_name", "---", "Café  🏛️"]
+)
+@patch("wagtail_generate.cli.run_wagtail_start", return_value=0)
+def test_explicit_site_names_are_preserved(
+    run_start: Mock,
+    prompted: bool,
+    name: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    arguments = [
+        "start",
+        "example",
+        "--directory",
+        str(tmp_path),
+        "--site-directory",
+        ".",
+    ]
+    value = f"  {name}  "
+    if prompted:
+        monkeypatch.setattr("builtins.input", lambda _: value)
+    else:
+        arguments.extend(["--site-name", value])
+
+    assert main(arguments) == 0
+    assert run_start.call_args.kwargs["site_name"] == name
+
+
+@pytest.mark.parametrize("prompted", [False, True])
+@pytest.mark.parametrize("invalid", ["   ", "First\nSecond", "First\tSecond", "A\x00B"])
+@patch("wagtail_generate.cli.run_wagtail_start", return_value=0)
+def test_invalid_site_names_are_rejected_consistently(
+    run_start: Mock,
+    prompted: bool,
+    invalid: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    destination = tmp_path / "site"
+    arguments = [
+        "start",
+        "example",
+        "--directory",
+        str(destination),
+        "--site-directory",
+        ".",
+    ]
+    if prompted:
+        responses = iter([invalid, "EXAMPLE's Site"])
+        monkeypatch.setattr("builtins.input", lambda _: next(responses))
+        assert main(arguments) == 0
+        assert run_start.call_args.kwargs["site_name"] == "EXAMPLE's Site"
+        assert "Invalid site name:" in capsys.readouterr().out
+    else:
+        arguments.extend(["--site-name", invalid])
+        assert main(arguments) == 2
+        run_start.assert_not_called()
+        assert "error: --site-name:" in capsys.readouterr().err
+    assert not destination.exists()
+
+
+@patch("wagtail_generate.cli.run_wagtail_start", return_value=0)
+def test_empty_explicit_site_name_is_rejected(
+    run_start: Mock,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert main(["start", "example", "--site-name", ""]) == 2
+    run_start.assert_not_called()
+    assert "site name cannot be empty" in capsys.readouterr().err
+
+
+@patch("wagtail_generate.cli.run_wagtail_start", return_value=0)
+def test_default_site_name_is_derived_from_package(
+    run_start: Mock,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prompts: list[str] = []
+
+    def accept_default(prompt: str) -> str:
+        prompts.append(prompt)
+        return ""
+
+    monkeypatch.setattr("builtins.input", accept_default)
+    assert (
+        main(
+            [
+                "start",
+                "my-example_site",
+                "--directory",
+                str(tmp_path),
+                "--site-directory",
+                ".",
+            ]
+        )
+        == 0
+    )
+    assert prompts == ["Site name [My Example Site]: "]
+    assert run_start.call_args.kwargs["site_name"] == "My Example Site"
