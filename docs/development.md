@@ -24,6 +24,21 @@ uv run mypy
 uv run pytest
 ```
 
+The test suite records application coverage using `pytest-cov`. To inspect the
+current report locally, run:
+
+```shell
+uv run pytest --cov=wagtail_generate --cov-report=term-missing
+uv run pytest --cov=wagtail_generate --cov-report=html:htmlcov
+open htmlcov/index.html
+```
+
+Coverage is measured for `src/wagtail_generate/`; the thin `__main__.py`
+module shim is excluded. CI enforces the current 95% baseline and uploads the
+XML report as a workflow artifact. Raise the threshold when meaningful tests
+increase the baseline, rather than excluding reachable code solely to satisfy
+the threshold.
+
 Pull requests and pushes to `main` run the same checks in GitHub Actions. The
 workflow also builds the source distribution and wheel and runs the installed
 distribution smoke test. The smoke test is opt-in locally because it creates an

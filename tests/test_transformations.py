@@ -46,6 +46,16 @@ def test_settings_and_app_config_transformations_are_string_operations() -> None
     )
 
 
+def test_settings_transformation_requires_the_generated_base_directory() -> None:
+    with pytest.raises(ProjectStructureError, match="BASE_DIR"):
+        adjust_settings("INSTALLED_APPS = []\n", "sites.example")
+
+
+def test_app_config_transformation_requires_the_generated_app_name() -> None:
+    with pytest.raises(ProjectStructureError, match="name ="):
+        adjust_app_config("class HomeConfig:\n", "sites.example")
+
+
 def test_flatten_validates_required_template_structure_before_moving(
     tmp_path: Path,
 ) -> None:
