@@ -11,7 +11,6 @@ from wagtail_generate.commands import GenerationError, run_command
 from wagtail_generate.developer_tools import (
     apply_developer_tooling_plan,
     configure_database,
-    database_driver,
 )
 
 # Retain the existing imports for callers while planning owns these definitions.
@@ -21,18 +20,24 @@ from wagtail_generate.planning import CommandPlan as CommandPlan
 from wagtail_generate.planning import Database as Database
 from wagtail_generate.planning import GenerationPlan as GenerationPlan
 from wagtail_generate.planning import ProjectOptions as ProjectOptions
+from wagtail_generate.planning import ResolvedDependencies as ResolvedDependencies
 from wagtail_generate.planning import (
     build_generation_plan as build_generation_plan,
 )
+from wagtail_generate.planning import dependency_groups
 from wagtail_generate.rendering import write_rendered_files
 from wagtail_generate.safety import (
     destination_is_in_source_checkout,
     source_checkout_root,
     validate_source_package,
 )
+from wagtail_generate.transformations import (
+    ProjectStructureError,
+    flatten_project_package,
+)
 
 ROOT_FILES = (".dockerignore", "Dockerfile", "manage.py")
-DependencyResolver = Callable[[Database, str], tuple[str, ...]]
+DependencyResolver = Callable[[Database, str], ResolvedDependencies]
 
 
 def run_wagtail_start(
@@ -122,15 +127,13 @@ def _validate_generation_boundary(
     validate_source_package(options.settings_module.partition(".")[0])
 
 
-def resolve_dependencies(database: Database, python_version: str) -> tuple[str, ...]:
+def resolve_dependencies(
+    database: Database, python_version: str
+) -> ResolvedDependencies:
     """Resolve direct dependencies before any generation side effects."""
-    requirements = ["wagtail"]
-    driver = database_driver(database)
-    if driver is not None:
-        requirements.append(driver)
-    requirements.extend(("ruff", "djangofmt", "pre-commit"))
+    requirements = dependency_groups(database)
     with tempfile.NamedTemporaryFile(mode="w", suffix=".in") as source:
-        source.write("\n".join(requirements) + "\n")
+        source.write("\n".join(requirements.all) + "\n")
         source.flush()
         result = run_command(
             [
@@ -152,13 +155,19 @@ def resolve_dependencies(database: Database, python_version: str) -> tuple[str, 
         for line in result.stdout.splitlines()
         if line.strip() and not line.startswith("#")
     )
-    direct = tuple(
-        next(line for line in resolved if line.lower().startswith(name.lower() + "=="))
-        for name in requirements
+    pinned: dict[str, str] = {}
+    for name in requirements.all:
+        prefix = name.lower() + "=="
+        match = next(
+            (line for line in resolved if line.lower().startswith(prefix)), None
+        )
+        if match is None:
+            raise ValueError(f"UV did not resolve direct dependency: {name}")
+        pinned[name] = match
+    return ResolvedDependencies(
+        runtime=tuple(pinned[name] for name in requirements.runtime),
+        development=tuple(pinned[name] for name in requirements.development),
     )
-    if len(direct) != len(requirements):
-        raise ValueError("UV did not resolve every direct dependency")
-    return direct
 
 
 def execute_generation_plan(plan: GenerationPlan) -> int:
@@ -375,79 +384,10 @@ def _flatten_project_package(
     project_name: str,
     destination_module: str,
 ) -> bool:
-    """Move the nested Django project package into the selected source folder."""
-    package_directory = generated_directory / project_name
-    if not package_directory.is_dir():
-        print(
-            f"error: Wagtail did not generate the expected {project_name}/ package",
-            file=sys.stderr,
-        )
+    """Adapt the generated package while retaining the legacy bool boundary."""
+    try:
+        flatten_project_package(generated_directory, project_name, destination_module)
+    except ProjectStructureError as error:
+        print(f"error: {error}", file=sys.stderr)
         return False
-
-    conflicts = [
-        child.name
-        for child in package_directory.iterdir()
-        if (generated_directory / child.name).exists()
-    ]
-    if conflicts:
-        print(
-            "error: refusing to overwrite generated code path(s): "
-            + ", ".join(sorted(conflicts)),
-            file=sys.stderr,
-        )
-        return False
-
-    for child in package_directory.iterdir():
-        child.replace(generated_directory / child.name)
-    package_directory.rmdir()
-
-    parent_directory = generated_directory.parent
-    for _ in range(len(destination_module.split(".")) - 1):
-        package_marker = parent_directory / "__init__.py"
-        if not package_marker.exists():
-            package_marker.write_text("")
-        parent_directory = parent_directory.parent
-
-    new_prefix = f"{destination_module}."
-    for python_file in generated_directory.rglob("*.py"):
-        content = python_file.read_text()
-        # Rewrite only import paths and quoted settings-module references. A
-        # global replacement would corrupt identifiers such as ``models.Model``
-        # when the project itself is named ``models``.
-        updated = re.sub(
-            rf'(?P<prefix>\b(?:from|import)\s+|["\']){re.escape(project_name)}\.',
-            rf"\g<prefix>{new_prefix}",
-            content,
-        )
-        for app_name in ("home", "search"):
-            for suffix in (" ", "."):
-                updated = updated.replace(
-                    f"from {app_name}{suffix}",
-                    f"from {destination_module}.{app_name}{suffix}",
-                )
-        if updated != content:
-            python_file.write_text(updated)
-
-    settings_file = generated_directory / "settings" / "base.py"
-    settings = settings_file.read_text()
-    source_depth = len(destination_module.split("."))
-    project_root_expression = "PROJECT_DIR" + ".parent" * source_depth
-    settings = settings.replace(
-        "BASE_DIR = PROJECT_DIR.parent",
-        f"BASE_DIR = {project_root_expression}",
-    )
-    for app_name in ("home", "search"):
-        settings = settings.replace(
-            f'"{app_name}"',
-            f'"{destination_module}.{app_name}"',
-        )
-    settings_file.write_text(settings)
-
-    home_app = generated_directory / "home" / "apps.py"
-    app_config = home_app.read_text().replace(
-        '    name = "home"',
-        f'    name = "{destination_module}.home"',
-    )
-    home_app.write_text(app_config)
-
     return True
