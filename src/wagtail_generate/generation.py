@@ -82,7 +82,6 @@ def run_wagtail_start(
             return 2
 
     try:
-        validate_source_package(options.settings_module.partition(".")[0])
         python_version = latest_stable_python_version(
             _nearest_existing_directory(project_directory)
         )

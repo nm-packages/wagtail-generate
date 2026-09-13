@@ -3,9 +3,11 @@
 from pathlib import Path
 
 from wagtail_generate.developer_tools import (
+    _append_tool_configuration,
+    apply_developer_tooling_plan,
+    build_developer_tooling_plan,
     configure_database,
     database_driver,
-    write_developer_tooling,
 )
 
 
@@ -33,12 +35,14 @@ def test_mysql_settings_and_tooling_are_consistent(tmp_path: Path) -> None:
     )
 
     configure_database(settings, "mysql", "example")
-    write_developer_tooling(
+    apply_developer_tooling_plan(
         project_directory=tmp_path,
-        project_name="example",
-        settings_module="src.settings",
-        database="mysql",
-        python_version="3.14",
+        plan=build_developer_tooling_plan(
+            project_name="example",
+            settings_module="src.settings",
+            database="mysql",
+            python_version="3.14",
+        ),
     )
 
     content = settings.read_text()
@@ -95,12 +99,14 @@ def test_sqlite_needs_no_server_or_database_driver(tmp_path: Path) -> None:
     )
 
     configure_database(settings, "sqlite3", "example")
-    write_developer_tooling(
+    apply_developer_tooling_plan(
         project_directory=tmp_path,
-        project_name="example",
-        settings_module="example.settings",
-        database="sqlite3",
-        python_version="3.15",
+        plan=build_developer_tooling_plan(
+            project_name="example",
+            settings_module="example.settings",
+            database="sqlite3",
+            python_version="3.15",
+        ),
     )
 
     content = settings.read_text()
@@ -127,3 +133,13 @@ def test_sqlite_needs_no_server_or_database_driver(tmp_path: Path) -> None:
     assert "FROM python:3.15-slim AS development" in dockerfile
     assert 'target-version = "py315"' in (tmp_path / "pyproject.toml").read_text()
     assert (tmp_path / "scripts" / "check_django_templates.py").is_file()
+
+
+def test_existing_tool_configuration_is_not_duplicated(tmp_path: Path) -> None:
+    pyproject = tmp_path / "pyproject.toml"
+    existing = '[tool.ruff]\ntarget-version = "py314"\n'
+    pyproject.write_text(existing)
+
+    _append_tool_configuration(pyproject, "\n[tool.ruff]\nline-length = 88\n")
+
+    assert pyproject.read_text() == existing

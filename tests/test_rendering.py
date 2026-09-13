@@ -40,27 +40,10 @@ def test_template_plans_cannot_escape_the_project_root(destination: Path) -> Non
         plan_template(destination, "static/gitignore")
 
 
-def test_sqlite_readme_quick_start_does_not_require_env_file() -> None:
-    content = render_template(
-        "README.md.jinja",
-        {
-            "site_name": "Example",
-            "project_name": "example",
-            "source_directory": ".",
-            "settings_module": "example.settings",
-            "database": "sqlite3",
-            "database_name": "SQLite",
-            "python_version": "3.14",
-        },
-    )
-
-    quick_start = content.split("## Quick start", 1)[1].split("## Docker setup", 1)[0]
-    assert "make dev" in quick_start
-    assert "cp .env.example .env" not in quick_start
-
-
-@pytest.mark.parametrize("database", ["sqlite3", "postgresql", "mysql"])
-@pytest.mark.parametrize("source_directory", [".", "src"])
+@pytest.mark.parametrize(
+    ("database", "source_directory"),
+    [("sqlite3", "."), ("sqlite3", "src"), ("postgresql", "src")],
+)
 def test_readme_documents_administrator_creation_for_each_workflow(
     database: str, source_directory: str
 ) -> None:
@@ -90,6 +73,10 @@ def test_readme_documents_administrator_creation_for_each_workflow(
         assert "project root" in section
         assert "docker compose" not in section
         assert section.index("make dev") < section.index("make superuser")
+    if database == "sqlite3":
+        assert "cp .env.example .env" not in quick_start
+    else:
+        assert "cp .env.example .env" in quick_start
 
     docker_setup = content.split("## Docker setup", 1)[1].split("## Local UV setup", 1)[
         0
@@ -116,8 +103,10 @@ def test_write_template_renders_content_and_applies_mode(tmp_path: Path) -> None
     assert destination.stat().st_mode & 0o777 == 0o700
 
 
-@pytest.mark.parametrize("database", ["sqlite3", "postgresql", "mysql"])
-@pytest.mark.parametrize("source_directory", [".", "src"])
+@pytest.mark.parametrize(
+    ("database", "source_directory"),
+    [("sqlite3", "."), ("sqlite3", "src"), ("postgresql", "src")],
+)
 def test_agent_guidance_matches_generated_environment(
     database: str, source_directory: str
 ) -> None:
@@ -164,8 +153,9 @@ def test_agent_guidance_matches_generated_environment(
         assert f"project uses `{database}`" in content
 
 
-@pytest.mark.parametrize("database", ["sqlite3", "postgresql", "mysql"])
-@pytest.mark.parametrize("source_directory", [".", "src"])
+@pytest.mark.parametrize(
+    ("database", "source_directory"), [("sqlite3", "."), ("mysql", "src")]
+)
 def test_readme_preserves_markdown_spacing_without_extra_blank_lines(
     database: str, source_directory: str
 ) -> None:

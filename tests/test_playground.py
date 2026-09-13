@@ -46,6 +46,13 @@ def test_reset_refuses_other_directory(destination: Path, tmp_path: Path) -> Non
         playground.reset_playground(tmp_path)
 
 
+def test_playground_requires_source_checkout(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(playground, "source_checkout_root", lambda: None)
+
+    with pytest.raises(ValueError, match="source checkout"):
+        playground.playground_directory()
+
+
 @pytest.mark.parametrize(
     ("arguments", "reset", "site_subfolder"),
     [

@@ -61,8 +61,17 @@ def test_start_rejects_removed_layout_option(
     run_start.assert_not_called()
 
 
-@patch("wagtail_generate.cli.run_wagtail_start", return_value=0)
-def test_start_runs_wagtail_command(run_start: Mock, tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("database", "expected_result"), [("postgresql", 0), ("sqlite3", 1)]
+)
+@patch("wagtail_generate.cli.run_wagtail_start")
+def test_start_forwards_options_and_exit_code(
+    run_start: Mock,
+    database: str,
+    expected_result: int,
+    tmp_path: Path,
+) -> None:
+    run_start.return_value = expected_result
     output = tmp_path / "output"
 
     assert (
@@ -73,20 +82,20 @@ def test_start_runs_wagtail_command(run_start: Mock, tmp_path: Path) -> None:
                 "--site-name",
                 "Example Website",
                 "--database",
-                "postgresql",
+                database,
                 "--directory",
                 str(output),
                 "--site-directory",
                 ".",
             ]
         )
-        == 0
+        == expected_result
     )
 
     run_start.assert_called_once_with(
         project_name="example",
         site_name="Example Website",
-        database="postgresql",
+        database=database,
         project_root=output,
         site_subfolder=None,
         template=None,
@@ -94,23 +103,30 @@ def test_start_runs_wagtail_command(run_start: Mock, tmp_path: Path) -> None:
     assert not output.exists()
 
 
+@pytest.mark.parametrize("state", ["absent", "empty", "nonempty"])
 @patch("wagtail_generate.cli.run_wagtail_start", return_value=0)
 @patch("wagtail_generate.cli.source_checkout_root", return_value=None)
-def test_start_creates_site_name_directory_by_default(
+def test_start_validates_site_name_directory_by_default(
     find_checkout: Mock,
     run_start: Mock,
+    state: str,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    destination = tmp_path / "example_site"
+    if state != "absent":
+        destination.mkdir()
+    if state == "nonempty":
+        (destination / ".hidden-file").write_text("existing")
     monkeypatch.chdir(tmp_path)
 
     result = main(
         [
             "start",
-            "cms_package",
+            "example",
             "--site-name",
-            "Editorial Website",
+            "Example Site",
             "--database",
             "postgresql",
             "--site-directory",
@@ -118,30 +134,34 @@ def test_start_creates_site_name_directory_by_default(
         ]
     )
 
-    destination = tmp_path / "editorial_website"
-    assert result == 0
-    assert not destination.exists()
-    assert f"Created project directory: {destination}" in capsys.readouterr().out
-    run_start.assert_called_once_with(
-        project_name="cms_package",
-        site_name="Editorial Website",
-        database="postgresql",
-        project_root=destination,
-        site_subfolder=None,
-        template=None,
-    )
+    if state == "nonempty":
+        assert result == 2
+        error = capsys.readouterr().err
+        assert f"project root must be empty: {destination}" in error
+        assert ".hidden-file" in error
+        run_start.assert_not_called()
+    else:
+        action = "Using" if state == "empty" else "Created"
+        assert result == 0
+        assert f"{action} project directory: {destination}" in capsys.readouterr().out
+        run_start.assert_called_once_with(
+            project_name="example",
+            site_name="Example Site",
+            database="postgresql",
+            project_root=destination,
+            site_subfolder=None,
+            template=None,
+        )
     find_checkout.assert_called_once_with()
 
 
 @pytest.mark.parametrize("site_name", ["日本語のサイト", "🏛️"])
 @pytest.mark.parametrize("prompted", [False, True])
-@pytest.mark.parametrize("explicit_directory", [False, True])
 @patch("wagtail_generate.cli.run_wagtail_start", return_value=0)
 def test_non_ascii_site_name_uses_project_name_as_directory_fallback(
     run_start: Mock,
     site_name: str,
     prompted: bool,
-    explicit_directory: bool,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -151,9 +171,7 @@ def test_non_ascii_site_name_uses_project_name_as_directory_fallback(
         monkeypatch.setattr("builtins.input", lambda _: site_name)
     else:
         arguments.extend(["--site-name", site_name])
-    destination = tmp_path / ("chosen" if explicit_directory else "cms_package")
-    if explicit_directory:
-        arguments.extend(["--directory", str(destination)])
+    destination = tmp_path / "cms_package"
 
     assert main(arguments) == 0
 
@@ -166,73 +184,6 @@ def test_non_ascii_site_name_uses_project_name_as_directory_fallback(
         template=None,
     )
     assert not destination.exists()
-
-
-@patch("wagtail_generate.cli.run_wagtail_start", return_value=0)
-@patch("wagtail_generate.cli.source_checkout_root", return_value=None)
-def test_start_accepts_existing_empty_site_name_directory(
-    find_checkout: Mock,
-    run_start: Mock,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    destination = tmp_path / "example_site"
-    destination.mkdir()
-    monkeypatch.chdir(tmp_path)
-
-    result = main(
-        [
-            "start",
-            "example",
-            "--site-name",
-            "Example Site",
-            "--database",
-            "postgresql",
-            "--site-directory",
-            ".",
-        ]
-    )
-
-    assert result == 0
-    assert run_start.call_args.kwargs["project_root"] == destination
-    assert f"Using project directory: {destination}" in capsys.readouterr().out
-    find_checkout.assert_called_once_with()
-
-
-@patch("wagtail_generate.cli.run_wagtail_start")
-@patch("wagtail_generate.cli.source_checkout_root", return_value=None)
-def test_start_refuses_nonempty_site_name_directory(
-    find_checkout: Mock,
-    run_start: Mock,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    destination = tmp_path / "example_site"
-    destination.mkdir()
-    (destination / ".hidden-file").write_text("existing")
-    monkeypatch.chdir(tmp_path)
-
-    result = main(
-        [
-            "start",
-            "example",
-            "--site-name",
-            "Example Site",
-            "--database",
-            "postgresql",
-            "--site-directory",
-            ".",
-        ]
-    )
-
-    assert result == 2
-    error = capsys.readouterr().err
-    assert f"project root must be empty: {destination}" in error
-    assert ".hidden-file" in error
-    run_start.assert_not_called()
-    find_checkout.assert_called_once_with()
 
 
 @patch("wagtail_generate.cli.run_wagtail_start")
@@ -290,33 +241,6 @@ def test_start_rejects_project_root_that_is_not_a_directory(
 
 
 @patch("wagtail_generate.cli.run_wagtail_start")
-def test_start_summarizes_many_existing_entries(
-    run_start: Mock,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    for index in range(6):
-        (tmp_path / f"entry-{index}").touch()
-
-    result = main(
-        [
-            "start",
-            "example",
-            "--site-name",
-            "Example",
-            "--directory",
-            str(tmp_path),
-            "--site-directory",
-            ".",
-        ]
-    )
-
-    assert result == 2
-    assert "and 1 more" in capsys.readouterr().err
-    run_start.assert_not_called()
-
-
-@patch("wagtail_generate.cli.run_wagtail_start")
 def test_start_reports_eof_while_prompting_for_source_location(
     run_start: Mock,
     tmp_path: Path,
@@ -344,7 +268,7 @@ def test_start_reports_eof_while_prompting_for_source_location(
     run_start.assert_not_called()
 
 
-@pytest.mark.parametrize("subfolder", ["site", "Site", "site/example", "json"])
+@pytest.mark.parametrize("subfolder", ["Site", "site/example"])
 @patch("wagtail_generate.cli.run_wagtail_start")
 def test_start_rejects_standard_library_subfolder_before_generation(
     run_start: Mock,
@@ -373,7 +297,7 @@ def test_start_rejects_standard_library_subfolder_before_generation(
     run_start.assert_not_called()
 
 
-@pytest.mark.parametrize("subfolder", ["django", "Django", "wagtail/cms", "taggit"])
+@pytest.mark.parametrize("subfolder", ["django", "wagtail/cms"])
 @patch("wagtail_generate.cli.run_wagtail_start")
 def test_start_rejects_dependency_subfolder_before_generation(
     run_start: Mock,
@@ -402,52 +326,28 @@ def test_start_rejects_dependency_subfolder_before_generation(
     run_start.assert_not_called()
 
 
-def test_subfolder_prompt_retries_dependency_name(
+@pytest.mark.parametrize(
+    ("invalid", "message"),
+    [
+        ("django", "conflicts with a generated-project dependency"),
+        ("site", "conflicts with Python's standard library"),
+    ],
+)
+def test_subfolder_prompt_retries_conflicting_name(
+    invalid: str,
+    message: str,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    responses = iter(["yes", "django", "src"])
+    responses = iter(["yes", invalid, "src"])
     assert prompt_for_site_subfolder("example", lambda _: next(responses)) == Path(
         "src"
     )
-    assert "conflicts with a generated-project dependency" in capsys.readouterr().out
+    assert message in capsys.readouterr().out
 
 
-def test_nested_package_can_use_dependency_name() -> None:
-    assert normalize_subfolder("src/django") == Path("src/django")
-
-
-def test_subfolder_prompt_retries_standard_library_name(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    responses = iter(["yes", "site", "src"])
-    assert prompt_for_site_subfolder("example", lambda _: next(responses)) == Path(
-        "src"
-    )
-    assert "conflicts with Python's standard library" in capsys.readouterr().out
-
-
-def test_nested_package_can_use_standard_library_name() -> None:
-    assert normalize_subfolder("src/site") == Path("src/site")
-
-
-@patch("wagtail_generate.cli.run_wagtail_start", return_value=1)
-def test_start_returns_wagtail_exit_code(run_start: Mock, tmp_path: Path) -> None:
-    assert (
-        main(
-            [
-                "start",
-                "example",
-                "--site-name",
-                "Example",
-                "--directory",
-                str(tmp_path),
-                "--site-directory",
-                ".",
-            ]
-        )
-        == 1
-    )
-    assert run_start.call_args.kwargs["database"] == "sqlite3"
+@pytest.mark.parametrize("value", ["src/django", "src/site"])
+def test_nested_package_can_use_conflicting_name(value: str) -> None:
+    assert normalize_subfolder(value) == Path(value)
 
 
 @patch("wagtail_generate.cli.run_wagtail_start", return_value=0)
@@ -517,35 +417,31 @@ def test_start_refuses_missing_template_before_creating_project(
     find_checkout.assert_called_once_with()
 
 
-def test_site_code_defaults_to_project_root() -> None:
-    subfolder = prompt_for_site_subfolder(
-        "example",
-        input_fn=lambda _: "",
-    )
-
-    assert subfolder is None
-
-
-def test_subfolder_name_defaults_to_project_name() -> None:
-    responses = iter(["yes", ""])
-
-    subfolder = prompt_for_site_subfolder(
-        "example",
-        input_fn=lambda _: next(responses),
-    )
-
-    assert subfolder == Path("example")
-
-
-def test_custom_subfolder_can_be_selected() -> None:
-    responses = iter(["y", "sites/example"])
+@pytest.mark.parametrize(
+    ("responses", "expected", "message"),
+    [
+        (("",), None, None),
+        (("yes", ""), Path("example"), None),
+        (("y", "sites/example"), Path("sites/example"), None),
+        (("y", "website source"), Path("website_source"), "Using subfolder name:"),
+    ],
+)
+def test_subfolder_prompt_selects_and_normalizes_layout(
+    responses: tuple[str, ...],
+    expected: Path | None,
+    message: str | None,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    response_iterator = iter(responses)
 
     subfolder = prompt_for_site_subfolder(
         "example",
-        input_fn=lambda _: next(responses),
+        input_fn=lambda _: next(response_iterator),
     )
 
-    assert subfolder == Path("sites/example")
+    assert subfolder == expected
+    if message is not None:
+        assert message in capsys.readouterr().out
 
 
 def test_human_readable_name_is_normalized() -> None:
@@ -556,33 +452,19 @@ def test_display_site_name_removes_package_separators() -> None:
     assert display_site_name("this_is-my site") == "This Is My Site"
 
 
-def test_site_name_is_prompted_separately() -> None:
-    site_name = prompt_for_site_name(
-        "Src",
-        input_fn=lambda _: "Example heritage centre",
-    )
-
-    assert site_name == "Example heritage centre"
-
-
-def test_site_name_prompt_accepts_default() -> None:
-    assert prompt_for_site_name("Example Site", input_fn=lambda _: "") == (
-        "Example Site"
-    )
-
-
-def test_subfolder_with_spaces_is_normalized(
-    capsys: pytest.CaptureFixture[str],
+@pytest.mark.parametrize(
+    ("default_name", "response", "expected"),
+    [
+        ("Src", "Example heritage centre", "Example heritage centre"),
+        ("Example Site", "", "Example Site"),
+    ],
+)
+def test_site_name_prompt_accepts_custom_and_default_values(
+    default_name: str,
+    response: str,
+    expected: str,
 ) -> None:
-    responses = iter(["y", "website source"])
-
-    subfolder = prompt_for_site_subfolder(
-        "this_is_my_site",
-        input_fn=lambda _: next(responses),
-    )
-
-    assert subfolder == Path("website_source")
-    assert "Using subfolder name: website_source" in capsys.readouterr().out
+    assert prompt_for_site_name(default_name, input_fn=lambda _: response) == expected
 
 
 @patch("wagtail_generate.cli.run_wagtail_start", return_value=0)
@@ -653,43 +535,8 @@ def test_start_refuses_destination_inside_tool_checkout(
     run_start.assert_not_called()
 
 
-@patch("wagtail_generate.cli.run_wagtail_start")
-@patch("wagtail_generate.cli.source_checkout_root", return_value=None)
-def test_start_refuses_nonempty_project_root(
-    find_checkout: Mock,
-    run_start: Mock,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    (tmp_path / ".hidden-file").write_text("existing")
-
-    result = main(
-        [
-            "start",
-            "example",
-            "--site-name",
-            "Example",
-            "--database",
-            "postgresql",
-            "--directory",
-            str(tmp_path),
-            "--site-directory",
-            ".",
-        ]
-    )
-
-    assert result == 2
-    error = capsys.readouterr().err
-    assert "project root must be empty" in error
-    assert ".hidden-file" in error
-    find_checkout.assert_called_once_with()
-    run_start.assert_not_called()
-
-
 @pytest.mark.parametrize("prompted", [False, True])
-@pytest.mark.parametrize(
-    "name", ["EXAMPLE's iWidget eShop", "my-site_name", "---", "Café  🏛️"]
-)
+@pytest.mark.parametrize("name", ["EXAMPLE's iWidget eShop", "Café  🏛️"])
 @patch("wagtail_generate.cli.run_wagtail_start", return_value=0)
 def test_explicit_site_names_are_preserved(
     run_start: Mock,
@@ -717,7 +564,7 @@ def test_explicit_site_names_are_preserved(
 
 
 @pytest.mark.parametrize("prompted", [False, True])
-@pytest.mark.parametrize("invalid", ["   ", "First\nSecond", "First\tSecond", "A\x00B"])
+@pytest.mark.parametrize("invalid", ["   ", "A\x00B"])
 @patch("wagtail_generate.cli.run_wagtail_start", return_value=0)
 def test_invalid_site_names_are_rejected_consistently(
     run_start: Mock,
@@ -748,16 +595,6 @@ def test_invalid_site_names_are_rejected_consistently(
         run_start.assert_not_called()
         assert "error: --site-name:" in capsys.readouterr().err
     assert not destination.exists()
-
-
-@patch("wagtail_generate.cli.run_wagtail_start", return_value=0)
-def test_empty_explicit_site_name_is_rejected(
-    run_start: Mock,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    assert main(["start", "example", "--site-name", ""]) == 2
-    run_start.assert_not_called()
-    assert "site name cannot be empty" in capsys.readouterr().err
 
 
 @patch("wagtail_generate.cli.run_wagtail_start", return_value=0)

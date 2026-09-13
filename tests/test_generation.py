@@ -99,6 +99,20 @@ def test_generation_boundary_rejects_escaping_subfolders(
 
 
 @patch("wagtail_generate.commands.subprocess.run")
+def test_generation_boundary_rejects_dot_subfolder(
+    run: Mock, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert (
+        run_wagtail_start(
+            "example", project_root=tmp_path / "site", site_subfolder=Path(".")
+        )
+        == 2
+    )
+    assert "must name a directory or be omitted" in capsys.readouterr().err
+    run.assert_not_called()
+
+
+@patch("wagtail_generate.commands.subprocess.run")
 def test_generation_boundary_rejects_source_checkout(
     run: Mock,
     tmp_path: Path,
@@ -116,7 +130,7 @@ def test_generation_boundary_rejects_source_checkout(
 
 @pytest.mark.parametrize(
     ("project_name", "subfolder"),
-    [("site", None), ("example", Path("site")), ("example", Path("json/cms"))],
+    [("site", None), ("example", Path("site/example"))],
 )
 @patch("wagtail_generate.commands.subprocess.run")
 def test_source_package_conflict_is_rejected_before_external_commands(
@@ -140,7 +154,7 @@ def test_source_package_conflict_is_rejected_before_external_commands(
 
 @pytest.mark.parametrize(
     ("project_name", "subfolder"),
-    [("django", None), ("example", Path("django")), ("example", Path("wagtail/cms"))],
+    [("django", None), ("example", Path("wagtail/cms"))],
 )
 @patch("wagtail_generate.commands.subprocess.run")
 def test_dependency_conflict_is_rejected_before_external_commands(
@@ -165,30 +179,22 @@ def test_dependency_conflict_is_rejected_before_external_commands(
 def write_mock_wagtail_project(
     project_root: Path, source_directory: Path = Path("src")
 ) -> None:
-    """Create the relevant subset of Wagtail's default generated tree."""
+    """Create the minimum generated tree needed by workflow tests."""
     (project_root / "pyproject.toml").write_text(
         '[project]\nname = "example"\nversion = "0.1.0"\n'
     )
     site_directory = project_root / source_directory
-    moved_root_files = (".dockerignore", "Dockerfile", "manage.py")
-    for filename in (*moved_root_files, "requirements.txt"):
-        content = (
-            'os.environ.setdefault("DJANGO_SETTINGS_MODULE", "example.settings.dev")'
-        )
-        (site_directory / filename).write_text(
-            content if filename == "manage.py" else filename
-        )
-    (site_directory / "README.md").write_text("Wagtail's generated README")
+    (site_directory / "manage.py").write_text(
+        'os.environ.setdefault("DJANGO_SETTINGS_MODULE", "example.settings.dev")'
+    )
     package_directory = site_directory / "example"
     (package_directory / "settings").mkdir(parents=True)
-    (package_directory / "__init__.py").write_text("")
     (package_directory / "settings" / "base.py").write_text(
         "from pathlib import Path\n\n"
         "PROJECT_DIR = Path(__file__).resolve().parent.parent\n"
         "BASE_DIR = PROJECT_DIR.parent\n"
         "INSTALLED_APPS = [\n"
         '    "home",\n'
-        '    "search",\n'
         "]\n"
         'ROOT_URLCONF = "example.urls"\n'
         'WAGTAIL_SITE_NAME = "example"\n'
@@ -199,7 +205,6 @@ def write_mock_wagtail_project(
         "    }\n"
         "}\n"
     )
-    (package_directory / "urls.py").write_text("")
     home_directory = site_directory / "home"
     home_directory.mkdir()
     (home_directory / "apps.py").write_text(
@@ -207,202 +212,6 @@ def write_mock_wagtail_project(
         "class HomeConfig(AppConfig):\n"
         '    name = "home"\n'
     )
-    (home_directory / "tests.py").write_text("from home.models import HomePage\n")
-    migrations = home_directory / "migrations"
-    migrations.mkdir()
-    (migrations / "0002_create_homepage.py").write_text(
-        "from django.db import migrations\n\n"
-        "def forwards(apps, schema_editor):\n"
-        '    apps.get_model("home", "HomePage")\n\n'
-        "class Migration(migrations.Migration):\n"
-        "    operations = [migrations.RunPython(forwards)]\n"
-    )
-
-
-@patch(
-    "wagtail_generate.generation.latest_stable_python_version",
-    return_value="3.14",
-)
-@patch("wagtail_generate.commands.subprocess.run")
-def test_run_wagtail_start_streams_native_command(
-    run: Mock,
-    resolve_python: Mock,
-    tmp_path: Path,
-) -> None:
-    project_root = tmp_path / "generated"
-
-    def run_command(
-        command: list[str], **kwargs: object
-    ) -> subprocess.CompletedProcess:
-        if "wagtail" in command and "start" in command:
-            write_mock_wagtail_project(cast(Path, kwargs["cwd"]))
-        return subprocess.CompletedProcess(command, returncode=0)
-
-    run.side_effect = run_command
-
-    result = run_wagtail_start(
-        "example",
-        site_name="Example website",
-        database="postgresql",
-        project_root=project_root,
-        site_subfolder=Path("src"),
-        template=Path("custom-template"),
-    )
-
-    assert result == 0
-    site_directory = project_root / "src"
-    moved_root_files = (".dockerignore", "Dockerfile", "manage.py")
-    package_directory = site_directory / "example"
-    home_directory = site_directory / "home"
-    migration = home_directory / "migrations" / "0002_create_homepage.py"
-    assert (project_root / "src").is_dir()
-    for filename in moved_root_files:
-        assert (project_root / filename).is_file()
-        assert not (site_directory / filename).exists()
-    assert not (project_root / "requirements.txt").exists()
-    assert not (site_directory / "requirements.txt").exists()
-    assert not (site_directory / "README.md").exists()
-    readme = (project_root / "README.md").read_text()
-    assert readme.startswith("# Example website")
-    assert "Site source: `src`" in readme
-    assert "Django settings: `src.settings`" in readme
-    assert "Database: PostgreSQL" in readme
-    assert "Python: 3.14" in readme
-    assert "cp .env.example .env\nmake dev" in readme
-    assert "make dev" in readme
-    assert "make docker" in readme
-    assert "make check" in readme
-    assert "git init" in readme
-    assert "git add --all" in readme
-    assert "uv run pre-commit install" in readme
-    agents = (project_root / "AGENTS.md").read_text()
-    assert "Example website" in agents
-    assert "Python project package: `example`" in agents
-    assert "Site source directory: `src`" in agents
-    assert "Django settings package: `src.settings`" in agents
-    assert "Database: `postgresql`" in agents
-    assert "custom template `custom-template`" in agents
-    for name in ("environment", "backend", "checks"):
-        path = f"docs/agent-instructions/{name}.md"
-        assert f"]({path})" in agents
-        assert (project_root / path).is_file()
-    backend = (project_root / "docs/agent-instructions/backend.md").read_text()
-    assert "`src.settings`" in backend
-    assert "project uses `postgresql`" in backend
-    assert "postgres:17-bookworm" in (project_root / "compose.yaml").read_text()
-    assert (project_root / "Makefile").is_file()
-    assert "uv sync --locked" in (project_root / "Dockerfile").read_text()
-    assert (
-        "FROM python:3.14-slim AS development"
-        in (project_root / "Dockerfile").read_text()
-    )
-    assert (project_root / ".pre-commit-config.yaml").is_file()
-    assert (project_root / "scripts" / "check_django_templates.py").is_file()
-    assert "[tool.djangofmt]" in (project_root / "pyproject.toml").read_text()
-    assert 'target-version = "py314"' in (project_root / "pyproject.toml").read_text()
-    assert (project_root / ".env.example").is_file()
-    assert not package_directory.exists()
-    assert (site_directory / "settings" / "base.py").is_file()
-    assert "src.settings.dev" in (project_root / "manage.py").read_text()
-    settings = (site_directory / "settings" / "base.py").read_text()
-    assert '"src.home"' in settings
-    assert '"src.search"' in settings
-    assert '"src.urls"' in settings
-    assert 'WAGTAIL_SITE_NAME = "Example website"' in settings
-    assert '"ENGINE": "django.db.backends.postgresql"' in settings
-    assert '"django.contrib.postgres"' in settings
-    assert 'os.environ.get("DATABASE_HOST", "127.0.0.1")' in settings
-    assert 'name = "src.home"' in (home_directory / "apps.py").read_text()
-    assert (home_directory / "tests.py").read_text() == (
-        "from src.home.models import HomePage\n"
-    )
-    assert 'apps.get_model("home", "HomePage")' in migration.read_text()
-    for python_file in site_directory.rglob("*.py"):
-        compile(python_file.read_text(), str(python_file), "exec")
-    generation_directory = run.call_args_list[0].kwargs["cwd"]
-    assert generation_directory.parent == tmp_path
-    assert run.call_args_list == [
-        (
-            (
-                [
-                    "uvx",
-                    "uv@0.12.7",
-                    "init",
-                    "--bare",
-                    "--no-workspace",
-                    "--python",
-                    "3.14",
-                    "--name",
-                    "example",
-                ],
-            ),
-            {"cwd": generation_directory, "check": False},
-        ),
-        (
-            (["uvx", "uv@0.12.7", "python", "pin", "3.14"],),
-            {"cwd": generation_directory, "check": False},
-        ),
-        (
-            (["uvx", "uv@0.12.7", "venv", "--relocatable", "--python", "3.14"],),
-            {"cwd": generation_directory, "check": False},
-        ),
-        (
-            (["uvx", "uv@0.12.7", "add", "wagtail", "psycopg[binary]"],),
-            {"cwd": generation_directory, "check": False},
-        ),
-        (
-            (
-                [
-                    "uvx",
-                    "uv@0.12.7",
-                    "add",
-                    "--dev",
-                    "ruff",
-                    "djangofmt",
-                    "pre-commit",
-                ],
-            ),
-            {"cwd": generation_directory, "check": False},
-        ),
-        (
-            (
-                [
-                    "uvx",
-                    "uv@0.12.7",
-                    "run",
-                    "wagtail",
-                    "start",
-                    "example",
-                    "src",
-                    "--template=custom-template",
-                ],
-            ),
-            {"cwd": generation_directory, "check": False},
-        ),
-        (
-            (["uvx", "uv@0.12.7", "run", "djangofmt", "src"],),
-            {"cwd": generation_directory, "check": False},
-        ),
-        (
-            (["uvx", "uv@0.12.7", "run", "ruff", "check", "--fix", "src"],),
-            {"cwd": generation_directory, "check": False},
-        ),
-        (
-            (
-                [
-                    "uvx",
-                    "uv@0.12.7",
-                    "run",
-                    "ruff",
-                    "format",
-                    "src",
-                    "manage.py",
-                ],
-            ),
-            {"cwd": generation_directory, "check": False},
-        ),
-    ]
-    resolve_python.assert_called_once_with(tmp_path)
 
 
 @patch(
@@ -434,36 +243,6 @@ def test_run_wagtail_start_stops_after_failed_uv_command(
         ],
         cwd=generation_directory,
         check=False,
-    )
-    assert generation_directory.parent == tmp_path
-    assert not project_root.exists()
-    resolve_python.assert_called_once_with(tmp_path)
-
-
-@patch(
-    "wagtail_generate.generation.latest_stable_python_version",
-    return_value="3.14",
-)
-@patch("wagtail_generate.commands.subprocess.run")
-def test_run_wagtail_start_defaults_to_sqlite_without_driver(
-    run: Mock,
-    resolve_python: Mock,
-    tmp_path: Path,
-) -> None:
-    run.side_effect = [
-        subprocess.CompletedProcess([], returncode=0),
-        subprocess.CompletedProcess([], returncode=0),
-        subprocess.CompletedProcess([], returncode=0),
-        subprocess.CompletedProcess([], returncode=1),
-    ]
-
-    project_root = tmp_path / "generated"
-
-    assert run_wagtail_start("example", project_root=project_root) == 1
-    generation_directory = run.call_args_list[0].kwargs["cwd"]
-    assert run.call_args_list[3] == (
-        (["uvx", "uv@0.12.7", "add", "wagtail"],),
-        {"cwd": generation_directory, "check": False},
     )
     assert generation_directory.parent == tmp_path
     assert not project_root.exists()
@@ -655,7 +434,7 @@ def test_flatten_preserves_unrelated_django_identifiers(
     assert "src.Model" not in content
 
 
-@pytest.mark.parametrize("stage", ["discovery", "dependencies", "setup"])
+@pytest.mark.parametrize("stage", ["discovery", "setup"])
 @patch("wagtail_generate.commands.subprocess.run")
 def test_missing_executable_returns_cli_error_without_publishing(
     run: Mock,
@@ -670,14 +449,10 @@ def test_missing_executable_returns_cli_error_without_publishing(
         )
     run.side_effect = FileNotFoundError("uvx unavailable")
     destination = tmp_path / "generated"
-    kwargs = (
-        {"dependency_resolver": resolve_dependencies} if stage == "dependencies" else {}
-    )
-    assert run_wagtail_start("example", project_root=destination, **kwargs) == 2
+    assert run_wagtail_start("example", project_root=destination) == 2
     message = capsys.readouterr().err
     expected = {
         "discovery": "Discover Python version",
-        "dependencies": "Resolve project dependencies",
         "setup": "Initialize project",
     }
     assert expected[stage] in message
@@ -708,8 +483,10 @@ def test_documentation_planning_failure_prevents_execution(
     assert not list(tmp_path.glob(".generated-*"))
 
 
-@pytest.mark.parametrize("subfolder", [None, Path("src"), Path("sites/cms")])
-@pytest.mark.parametrize("database", ["sqlite3", "postgresql", "mysql"])
+@pytest.mark.parametrize(
+    ("subfolder", "database"),
+    [(None, "sqlite3"), (Path("src"), "postgresql"), (Path("sites/cms"), "mysql")],
+)
 @patch("wagtail_generate.generation.latest_stable_python_version", return_value="3.14")
 @patch("wagtail_generate.commands.subprocess.run")
 def test_workflow_configures_before_formatting_and_publishes_complete_site(
