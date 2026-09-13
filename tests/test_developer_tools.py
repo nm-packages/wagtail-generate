@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from wagtail_generate.developer_tools import (
+    _append_tool_configuration,
     configure_database,
     database_driver,
     write_developer_tooling,
@@ -127,3 +128,13 @@ def test_sqlite_needs_no_server_or_database_driver(tmp_path: Path) -> None:
     assert "FROM python:3.15-slim AS development" in dockerfile
     assert 'target-version = "py315"' in (tmp_path / "pyproject.toml").read_text()
     assert (tmp_path / "scripts" / "check_django_templates.py").is_file()
+
+
+def test_existing_tool_configuration_is_not_duplicated(tmp_path: Path) -> None:
+    pyproject = tmp_path / "pyproject.toml"
+    existing = '[tool.ruff]\ntarget-version = "py314"\n'
+    pyproject.write_text(existing)
+
+    _append_tool_configuration(pyproject, "\n[tool.ruff]\nline-length = 88\n")
+
+    assert pyproject.read_text() == existing

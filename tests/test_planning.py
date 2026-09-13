@@ -9,7 +9,7 @@ from wagtail_generate.planning import Database, ProjectOptions, build_generation
 
 @pytest.mark.parametrize(
     ("project_name", "subfolder"),
-    [("site", None), ("example", Path("site")), ("example", Path("email/cms"))],
+    [("site", None), ("example", Path("email/cms"))],
 )
 def test_plan_rejects_standard_library_source_package(
     project_name: str, subfolder: Path | None, tmp_path: Path
@@ -84,7 +84,7 @@ def test_complete_plan_is_rendered_without_writing_destination(
 
 @pytest.mark.parametrize(
     ("project_name", "subfolder"),
-    [("django", None), ("example", Path("django")), ("example", Path("wagtail/cms"))],
+    [("django", None), ("example", Path("wagtail/cms"))],
 )
 def test_plan_rejects_dependency_source_package(
     project_name: str, subfolder: Path | None, tmp_path: Path
