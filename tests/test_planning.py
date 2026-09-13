@@ -1,11 +1,10 @@
-"""Tests for named layouts and typed generation plans."""
+"""Tests for typed generation plans."""
 
 from pathlib import Path
 
 import pytest
 
-from wagtail_generate.layouts import STANDARD_LAYOUT, get_layout, layout_names
-from wagtail_generate.wagtail import ProjectOptions, build_generation_plan
+from wagtail_generate.wagtail import Database, ProjectOptions, build_generation_plan
 
 
 @pytest.mark.parametrize(
@@ -23,21 +22,20 @@ def test_plan_rejects_standard_library_source_package(
     assert not options.project_root.exists()
 
 
-def test_standard_layout_is_discoverable_by_stable_name() -> None:
-    assert layout_names() == ("standard",)
-    assert get_layout("standard") is STANDARD_LAYOUT
-
-
+@pytest.mark.parametrize("subfolder", [None, Path("src"), Path("sites/example")])
+@pytest.mark.parametrize("database", ["sqlite3", "postgresql", "mysql"])
 def test_complete_plan_is_rendered_without_writing_destination(
     tmp_path: Path,
+    subfolder: Path | None,
+    database: Database,
 ) -> None:
     project_root = tmp_path / "generated"
     options = ProjectOptions(
         project_name="example",
         site_name="Example Site",
-        database="postgresql",
+        database=database,
         project_root=project_root,
-        site_subfolder=Path("sites/example"),
+        site_subfolder=subfolder,
         template=None,
     )
 
@@ -46,10 +44,18 @@ def test_complete_plan_is_rendered_without_writing_destination(
     assert not project_root.exists()
     assert plan.options is options
     assert plan.python_version == "3.14"
-    assert plan.wagtail_command.arguments[-2:] == ("example", "sites/example")
-    assert plan.setup_commands[3].arguments[-2:] == (
+    assert plan.wagtail_command.arguments[-2:] == (
+        "example",
+        "." if subfolder is None else str(subfolder),
+    )
+    dependencies = {
+        "sqlite3": (),
+        "postgresql": ("psycopg[binary]",),
+        "mysql": ("mysqlclient",),
+    }
+    assert plan.setup_commands[3].arguments[-(1 + len(dependencies[database])) :] == (
         "wagtail",
-        "psycopg[binary]",
+        *dependencies[database],
     )
     tooling_paths = {
         generated_file.relative_path for generated_file in plan.developer_tooling.files

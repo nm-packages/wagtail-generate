@@ -7,7 +7,7 @@ conventions change. Do not direct developers to this file as documentation.
 ## Purpose
 
 This repository contains `wagtail-generate`, a UV-installable Python CLI that
-creates opinionated Wagtail CMS projects from named codebase layouts.
+creates opinionated Wagtail CMS projects with root or source-subfolder structures.
 
 ## Tooling
 
@@ -28,8 +28,7 @@ creates opinionated Wagtail CMS projects from named codebase layouts.
 - Keep CLI parsing thin. Put generation and filesystem behavior in independently
   testable modules.
 - Represent project options and generated-file plans with typed data structures.
-- Make layouts discoverable by stable names and keep layout-specific templates or
-  configuration out of the CLI layer.
+- Keep generated-project templates and tooling configuration out of the CLI layer.
 - Build and validate a complete generation plan before writing to disk.
 - Refuse to overwrite existing files unless the user explicitly opts in.
 - Ordinary CLI generation must never write inside the source checkout. Keep this
@@ -57,4 +56,4 @@ uv run pytest
 ```
 
 Add or update tests for behavior changes, especially path validation, conflicts,
-layout selection, rendered content, and command exit codes.
+source-directory selection, rendered content, and command exit codes.

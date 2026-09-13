@@ -14,7 +14,6 @@ from wagtail_generate.cli import (
     prompt_for_site_name,
     prompt_for_site_subfolder,
 )
-from wagtail_generate.layouts import STANDARD_LAYOUT
 
 
 def test_cli_without_arguments_prints_help(capsys: pytest.CaptureFixture[str]) -> None:
@@ -30,6 +29,17 @@ def test_cli_reports_version(capsys: pytest.CaptureFixture[str]) -> None:
 
     output = capsys.readouterr().out
     assert output.strip() == f"wagtail-generate {__version__}"
+
+
+@patch("wagtail_generate.cli.run_wagtail_start")
+def test_start_rejects_removed_layout_option(
+    run_start: Mock, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit, match="2"):
+        main(["start", "example", "--layout", "standard"])
+
+    assert "unrecognized arguments: --layout standard" in capsys.readouterr().err
+    run_start.assert_not_called()
 
 
 @patch("wagtail_generate.cli.run_wagtail_start", return_value=0)
@@ -61,7 +71,6 @@ def test_start_runs_wagtail_command(run_start: Mock, tmp_path: Path) -> None:
         project_root=output,
         site_subfolder=None,
         template=None,
-        layout=STANDARD_LAYOUT,
     )
     assert not output.exists()
 
@@ -101,7 +110,6 @@ def test_start_creates_site_name_directory_by_default(
         project_root=destination,
         site_subfolder=None,
         template=None,
-        layout=STANDARD_LAYOUT,
     )
     find_checkout.assert_called_once_with()
 
@@ -137,7 +145,6 @@ def test_non_ascii_site_name_uses_project_name_as_directory_fallback(
         project_root=destination,
         site_subfolder=None,
         template=None,
-        layout=STANDARD_LAYOUT,
     )
     assert not destination.exists()
 
@@ -482,7 +489,6 @@ def test_start_uses_normalized_project_name(
         project_root=tmp_path,
         site_subfolder=None,
         template=None,
-        layout=STANDARD_LAYOUT,
     )
 
 

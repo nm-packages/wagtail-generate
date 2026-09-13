@@ -5,7 +5,7 @@ environments, dependencies, and command execution. Support the Python version
 declared in `.python-version` and `pyproject.toml`.
 
 Create a branch before making changes, using `<work-type>/<short-description>`
-(for example, `docs/simplify-documentation`, `feature/new-layout`, or
+(for example, `docs/simplify-documentation`, `feature/new-tooling`, or
 `testing/path-validation`). Do not work directly on `main`.
 
 ## Setup and checks
@@ -30,7 +30,7 @@ changes. Verify a specific changed-file selection with
 `uv run pre-commit run pytest --files <path>`.
 
 Add or update tests for
-behavior changes, especially path validation, conflicts, layout selection,
+behavior changes, especially path validation, conflicts, source-directory selection,
 rendered content, and command exit codes. For an editable CLI installation, use
 `uv tool install --editable .`.
 
@@ -104,8 +104,9 @@ missing migrations. The generator's pytest and mypy setup is separate.
 
 Keep CLI parsing thin and put generation and filesystem behavior in independently
 testable modules. Use typed structures for project options and generated-file
-plans. Layouts should have stable, discoverable names, with their configuration
-and templates outside the CLI layer.
+plans. Keep generated-project configuration and templates outside the CLI layer.
+The generator uses one tooling and template set; `--site-directory` selects where
+Wagtail source lives, while `--template` supplies a custom Wagtail start template.
 
 Build and validate the full generation plan before writing to disk. Refuse to
 overwrite existing files without an explicit opt-in. Check the source-checkout

@@ -9,7 +9,6 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from wagtail_generate import __version__
-from wagtail_generate.layouts import get_layout, layout_names
 from wagtail_generate.safety import (
     destination_is_in_source_checkout,
     source_checkout_root,
@@ -105,9 +104,7 @@ def build_parser() -> argparse.ArgumentParser:
     """Create the command-line argument parser."""
     parser = argparse.ArgumentParser(
         prog="wagtail-generate",
-        description=(
-            "Generate an opinionated Wagtail CMS project from a named layout."
-        ),
+        description="Generate an opinionated Wagtail CMS project.",
     )
     parser.add_argument(
         "--version",
@@ -148,12 +145,6 @@ def build_parser() -> argparse.ArgumentParser:
             "Non-interactive Wagtail code directory relative to the project root; "
             "use '.' for the root."
         ),
-    )
-    start_parser.add_argument(
-        "--layout",
-        choices=layout_names(),
-        default="standard",
-        help="Named codebase layout; defaults to standard.",
     )
     start_parser.add_argument(
         "--template",
@@ -277,7 +268,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             project_root=project_root,
             site_subfolder=site_subfolder,
             template=template,
-            layout=get_layout(arguments.layout),
         )
         if result == 0 and arguments.directory is None:
             action = "Using" if project_root_exists else "Created"

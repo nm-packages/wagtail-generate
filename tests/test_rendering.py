@@ -35,7 +35,6 @@ def test_sqlite_readme_quick_start_does_not_require_env_file() -> None:
         {
             "site_name": "Example",
             "project_name": "example",
-            "layout": "standard",
             "source_directory": ".",
             "settings_module": "example.settings",
             "database": "sqlite3",
@@ -59,7 +58,6 @@ def test_readme_documents_administrator_creation_for_each_workflow(
         {
             "site_name": "Example",
             "project_name": "example",
-            "layout": "standard",
             "source_directory": source_directory,
             "settings_module": (
                 "example.settings" if source_directory == "." else "src.settings"
@@ -115,9 +113,8 @@ def test_agent_guidance_matches_generated_environment(
     settings_module = "example.settings" if source_directory == "." else "src.settings"
     context = {
         "site_name": "Example",
-        "template_description": "the standard layout",
+        "template_description": "the default Wagtail template",
         "project_name": "example",
-        "layout": "standard",
         "source_directory": source_directory,
         "settings_module": settings_module,
         "database": database,
@@ -166,7 +163,6 @@ def test_readme_preserves_markdown_spacing_without_extra_blank_lines(
         {
             "site_name": "Example",
             "project_name": "example",
-            "layout": "standard",
             "source_directory": source_directory,
             "settings_module": "example.settings",
             "database": database,

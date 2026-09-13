@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "wagtail-generate"
 version = "0.1.0"
-description = "Generate opinionated Wagtail CMS projects from reusable codebase layouts."
+description = "Generate opinionated Wagtail CMS projects with UV and Docker development."
 readme = "README.md"
 requires-python = ">=3.14"
 license = "MIT"
