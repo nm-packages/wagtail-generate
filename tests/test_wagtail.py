@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from wagtail_generate.planning import Database
+from wagtail_generate.planning import Database, ResolvedDependencies
 from wagtail_generate.wagtail import (
     _flatten_project_package,
     latest_stable_python_version,
@@ -22,14 +22,17 @@ def stub_dependency_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "wagtail_generate.wagtail.resolve_dependencies",
         lambda database, python_version: (
-            ("wagtail", "ruff", "djangofmt", "pre-commit")
+            ResolvedDependencies(
+                runtime=("wagtail",),
+                development=("ruff", "djangofmt", "pre-commit"),
+            )
             if database == "sqlite3"
-            else (
-                "wagtail",
-                "psycopg[binary]" if database == "postgresql" else "mysqlclient",
-                "ruff",
-                "djangofmt",
-                "pre-commit",
+            else ResolvedDependencies(
+                runtime=(
+                    "wagtail",
+                    "psycopg[binary]" if database == "postgresql" else "mysqlclient",
+                ),
+                development=("ruff", "djangofmt", "pre-commit"),
             )
         ),
     )
@@ -51,12 +54,9 @@ def test_resolve_dependencies_returns_pinned_direct_requirements(run: Mock) -> N
         stderr="",
     )
 
-    assert resolve_dependencies("postgresql", "3.14") == (
-        "wagtail==7.2.1",
-        "psycopg[binary]==3.2.9",
-        "ruff==0.12.0",
-        "djangofmt==1.0.0",
-        "pre-commit==4.6.2",
+    assert resolve_dependencies("postgresql", "3.14") == ResolvedDependencies(
+        runtime=("wagtail==7.2.1", "psycopg[binary]==3.2.9"),
+        development=("ruff==0.12.0", "djangofmt==1.0.0", "pre-commit==4.6.2"),
     )
 
 
@@ -67,6 +67,19 @@ def test_resolve_dependencies_reports_resolution_failure(run: Mock) -> None:
     )
 
     with pytest.raises(RuntimeError, match="no matching distribution"):
+        resolve_dependencies("sqlite3", "3.14")
+
+
+@patch("wagtail_generate.commands.subprocess.run")
+def test_resolve_dependencies_reports_missing_direct_requirement(run: Mock) -> None:
+    run.return_value = subprocess.CompletedProcess(
+        [],
+        returncode=0,
+        stdout="wagtail==7.2.1\nruff==0.12.0\npre-commit==4.6.2\n",
+        stderr="",
+    )
+
+    with pytest.raises(ValueError, match="djangofmt"):
         resolve_dependencies("sqlite3", "3.14")
 
 
@@ -171,6 +184,8 @@ def write_mock_wagtail_project(
     (package_directory / "__init__.py").write_text("")
     (package_directory / "settings" / "base.py").write_text(
         "from pathlib import Path\n\n"
+        "PROJECT_DIR = Path(__file__).resolve().parent.parent\n"
+        "BASE_DIR = PROJECT_DIR.parent\n"
         "INSTALLED_APPS = [\n"
         '    "home",\n'
         '    "search",\n'

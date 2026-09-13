@@ -44,6 +44,17 @@ def test_complete_plan_is_rendered_without_writing_destination(
     assert not project_root.exists()
     assert plan.options is options
     assert plan.python_version == "3.14"
+    expected_runtime = {
+        "sqlite3": ("wagtail",),
+        "postgresql": ("wagtail", "psycopg[binary]"),
+        "mysql": ("wagtail", "mysqlclient"),
+    }[database]
+    assert plan.resolved_dependencies.runtime == expected_runtime
+    assert plan.resolved_dependencies.development == (
+        "ruff",
+        "djangofmt",
+        "pre-commit",
+    )
     assert plan.wagtail_command.arguments[-2:] == (
         "example",
         "." if subfolder is None else str(subfolder),

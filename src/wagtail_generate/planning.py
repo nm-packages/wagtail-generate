@@ -1,5 +1,6 @@
 """Build typed command and rendered-file plans without executing them."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -50,6 +51,31 @@ class CommandPlan:
 
 
 @dataclass(frozen=True)
+class ResolvedDependencies:
+    """Pinned runtime and development dependencies for a generated project."""
+
+    runtime: tuple[str, ...]
+    development: tuple[str, ...]
+
+    @property
+    def all(self) -> tuple[str, ...]:
+        """Return dependencies in the order used for generated lock files."""
+        return self.runtime + self.development
+
+
+def dependency_groups(database: Database) -> ResolvedDependencies:
+    """Return the direct runtime and development requirements for a database."""
+    runtime = ["wagtail"]
+    driver = database_driver(database)
+    if driver is not None:
+        runtime.append(driver)
+    return ResolvedDependencies(
+        runtime=tuple(runtime),
+        development=("ruff", "djangofmt", "pre-commit"),
+    )
+
+
+@dataclass(frozen=True)
 class GenerationPlan:
     """A complete, rendered generation plan ready for side-effect execution."""
 
@@ -60,33 +86,27 @@ class GenerationPlan:
     formatting_commands: tuple[CommandPlan, ...]
     developer_tooling: DeveloperToolingPlan
     documentation_files: tuple[RenderedFile, ...]
-    resolved_dependencies: tuple[str, ...]
+    resolved_dependencies: ResolvedDependencies
 
 
 def build_generation_plan(
     options: ProjectOptions,
     python_version: str,
-    resolved_dependencies: tuple[str, ...] | None = None,
+    resolved_dependencies: ResolvedDependencies | None = None,
 ) -> GenerationPlan:
     """Render and validate every generator-owned action before writing files."""
     validate_source_package(options.settings_module.partition(".")[0])
-    runtime_dependencies = ["wagtail"]
-    driver = database_driver(options.database)
-    if driver is not None:
-        runtime_dependencies.append(driver)
     if resolved_dependencies is None:
-        resolved_dependencies = tuple(
-            runtime_dependencies + ["ruff", "djangofmt", "pre-commit"]
-        )
-    runtime_count = len(runtime_dependencies)
-    runtime_dependencies = list(resolved_dependencies[:runtime_count])
-    development_dependencies = list(resolved_dependencies[runtime_count:])
+        resolved_dependencies = dependency_groups(options.database)
 
     return GenerationPlan(
         options=options,
         python_version=python_version,
         setup_commands=_plan_setup_commands(
-            options, python_version, runtime_dependencies, development_dependencies
+            options,
+            python_version,
+            resolved_dependencies.runtime,
+            resolved_dependencies.development,
         ),
         wagtail_command=_plan_wagtail_command(options),
         formatting_commands=_plan_formatting_commands(options),
@@ -104,8 +124,8 @@ def build_generation_plan(
 def _plan_setup_commands(
     options: ProjectOptions,
     python_version: str,
-    runtime_dependencies: list[str],
-    development_dependencies: list[str],
+    runtime_dependencies: Sequence[str],
+    development_dependencies: Sequence[str],
 ) -> tuple[CommandPlan, ...]:
     """Plan environment creation and dependency installation in execution order."""
     return (

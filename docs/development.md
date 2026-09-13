@@ -159,10 +159,15 @@ staging, cleanup, publication, and execution error reporting. Inside staging,
 4. `_configure_project()` applies the site name, database, tooling, and documentation.
 5. `_format_project()` runs the planned template and Python formatters.
 
-Structure adaptation stops generation when the expected package is missing or
-flattening would overwrite a generated file. Only a fully successful sequence is
-published; the destination is checked again before publication. Temporary staging
-is cleaned up on failure. Source-rewriting details remain in `wagtail.py`.
+Structure adaptation stops generation when the expected package or template files
+are missing, or flattening would overwrite a generated file. The focused
+transformations in `transformations.py` move the package, create package markers,
+rewrite imports, and adjust settings and app configuration. `planning.py` also
+keeps runtime and development dependencies as separate typed groups, so command
+construction and UV resolution do not depend on tuple positions.
+
+Only a fully successful sequence is published; the destination is checked again
+before publication. Temporary staging is cleaned up on failure.
 
 A failed command raises immediately, so later steps and
 publication do not run. The execution boundary reports the error and preserves
