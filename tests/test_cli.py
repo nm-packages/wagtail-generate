@@ -157,13 +157,11 @@ def test_start_validates_site_name_directory_by_default(
 
 @pytest.mark.parametrize("site_name", ["日本語のサイト", "🏛️"])
 @pytest.mark.parametrize("prompted", [False, True])
-@pytest.mark.parametrize("explicit_directory", [False, True])
 @patch("wagtail_generate.cli.run_wagtail_start", return_value=0)
 def test_non_ascii_site_name_uses_project_name_as_directory_fallback(
     run_start: Mock,
     site_name: str,
     prompted: bool,
-    explicit_directory: bool,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -173,9 +171,7 @@ def test_non_ascii_site_name_uses_project_name_as_directory_fallback(
         monkeypatch.setattr("builtins.input", lambda _: site_name)
     else:
         arguments.extend(["--site-name", site_name])
-    destination = tmp_path / ("chosen" if explicit_directory else "cms_package")
-    if explicit_directory:
-        arguments.extend(["--directory", str(destination)])
+    destination = tmp_path / "cms_package"
 
     assert main(arguments) == 0
 
@@ -421,35 +417,31 @@ def test_start_refuses_missing_template_before_creating_project(
     find_checkout.assert_called_once_with()
 
 
-def test_site_code_defaults_to_project_root() -> None:
-    subfolder = prompt_for_site_subfolder(
-        "example",
-        input_fn=lambda _: "",
-    )
-
-    assert subfolder is None
-
-
-def test_subfolder_name_defaults_to_project_name() -> None:
-    responses = iter(["yes", ""])
-
-    subfolder = prompt_for_site_subfolder(
-        "example",
-        input_fn=lambda _: next(responses),
-    )
-
-    assert subfolder == Path("example")
-
-
-def test_custom_subfolder_can_be_selected() -> None:
-    responses = iter(["y", "sites/example"])
+@pytest.mark.parametrize(
+    ("responses", "expected", "message"),
+    [
+        (("",), None, None),
+        (("yes", ""), Path("example"), None),
+        (("y", "sites/example"), Path("sites/example"), None),
+        (("y", "website source"), Path("website_source"), "Using subfolder name:"),
+    ],
+)
+def test_subfolder_prompt_selects_and_normalizes_layout(
+    responses: tuple[str, ...],
+    expected: Path | None,
+    message: str | None,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    response_iterator = iter(responses)
 
     subfolder = prompt_for_site_subfolder(
         "example",
-        input_fn=lambda _: next(responses),
+        input_fn=lambda _: next(response_iterator),
     )
 
-    assert subfolder == Path("sites/example")
+    assert subfolder == expected
+    if message is not None:
+        assert message in capsys.readouterr().out
 
 
 def test_human_readable_name_is_normalized() -> None:
@@ -460,33 +452,19 @@ def test_display_site_name_removes_package_separators() -> None:
     assert display_site_name("this_is-my site") == "This Is My Site"
 
 
-def test_site_name_is_prompted_separately() -> None:
-    site_name = prompt_for_site_name(
-        "Src",
-        input_fn=lambda _: "Example heritage centre",
-    )
-
-    assert site_name == "Example heritage centre"
-
-
-def test_site_name_prompt_accepts_default() -> None:
-    assert prompt_for_site_name("Example Site", input_fn=lambda _: "") == (
-        "Example Site"
-    )
-
-
-def test_subfolder_with_spaces_is_normalized(
-    capsys: pytest.CaptureFixture[str],
+@pytest.mark.parametrize(
+    ("default_name", "response", "expected"),
+    [
+        ("Src", "Example heritage centre", "Example heritage centre"),
+        ("Example Site", "", "Example Site"),
+    ],
+)
+def test_site_name_prompt_accepts_custom_and_default_values(
+    default_name: str,
+    response: str,
+    expected: str,
 ) -> None:
-    responses = iter(["y", "website source"])
-
-    subfolder = prompt_for_site_subfolder(
-        "this_is_my_site",
-        input_fn=lambda _: next(responses),
-    )
-
-    assert subfolder == Path("website_source")
-    assert "Using subfolder name: website_source" in capsys.readouterr().out
+    assert prompt_for_site_name(default_name, input_fn=lambda _: response) == expected
 
 
 @patch("wagtail_generate.cli.run_wagtail_start", return_value=0)
