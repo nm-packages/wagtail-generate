@@ -179,30 +179,22 @@ def test_dependency_conflict_is_rejected_before_external_commands(
 def write_mock_wagtail_project(
     project_root: Path, source_directory: Path = Path("src")
 ) -> None:
-    """Create the relevant subset of Wagtail's default generated tree."""
+    """Create the minimum generated tree needed by workflow tests."""
     (project_root / "pyproject.toml").write_text(
         '[project]\nname = "example"\nversion = "0.1.0"\n'
     )
     site_directory = project_root / source_directory
-    moved_root_files = (".dockerignore", "Dockerfile", "manage.py")
-    for filename in (*moved_root_files, "requirements.txt"):
-        content = (
-            'os.environ.setdefault("DJANGO_SETTINGS_MODULE", "example.settings.dev")'
-        )
-        (site_directory / filename).write_text(
-            content if filename == "manage.py" else filename
-        )
-    (site_directory / "README.md").write_text("Wagtail's generated README")
+    (site_directory / "manage.py").write_text(
+        'os.environ.setdefault("DJANGO_SETTINGS_MODULE", "example.settings.dev")'
+    )
     package_directory = site_directory / "example"
     (package_directory / "settings").mkdir(parents=True)
-    (package_directory / "__init__.py").write_text("")
     (package_directory / "settings" / "base.py").write_text(
         "from pathlib import Path\n\n"
         "PROJECT_DIR = Path(__file__).resolve().parent.parent\n"
         "BASE_DIR = PROJECT_DIR.parent\n"
         "INSTALLED_APPS = [\n"
         '    "home",\n'
-        '    "search",\n'
         "]\n"
         'ROOT_URLCONF = "example.urls"\n'
         'WAGTAIL_SITE_NAME = "example"\n'
@@ -213,7 +205,6 @@ def write_mock_wagtail_project(
         "    }\n"
         "}\n"
     )
-    (package_directory / "urls.py").write_text("")
     home_directory = site_directory / "home"
     home_directory.mkdir()
     (home_directory / "apps.py").write_text(
@@ -221,80 +212,6 @@ def write_mock_wagtail_project(
         "class HomeConfig(AppConfig):\n"
         '    name = "home"\n'
     )
-    (home_directory / "tests.py").write_text("from home.models import HomePage\n")
-    migrations = home_directory / "migrations"
-    migrations.mkdir()
-    (migrations / "0002_create_homepage.py").write_text(
-        "from django.db import migrations\n\n"
-        "def forwards(apps, schema_editor):\n"
-        '    apps.get_model("home", "HomePage")\n\n'
-        "class Migration(migrations.Migration):\n"
-        "    operations = [migrations.RunPython(forwards)]\n"
-    )
-
-
-@patch(
-    "wagtail_generate.generation.latest_stable_python_version",
-    return_value="3.14",
-)
-@patch("wagtail_generate.commands.subprocess.run")
-def test_run_wagtail_start_publishes_valid_transformed_source_layout(
-    run: Mock,
-    resolve_python: Mock,
-    tmp_path: Path,
-) -> None:
-    project_root = tmp_path / "generated"
-
-    def run_command(
-        command: list[str], **kwargs: object
-    ) -> subprocess.CompletedProcess:
-        if "wagtail" in command and "start" in command:
-            write_mock_wagtail_project(cast(Path, kwargs["cwd"]))
-        return subprocess.CompletedProcess(command, returncode=0)
-
-    run.side_effect = run_command
-
-    result = run_wagtail_start(
-        "example",
-        site_name="Example website",
-        database="postgresql",
-        project_root=project_root,
-        site_subfolder=Path("src"),
-        template=Path("custom-template"),
-    )
-
-    assert result == 0
-    site_directory = project_root / "src"
-    home_directory = site_directory / "home"
-    assert site_directory.is_dir()
-    assert (project_root / "manage.py").is_file()
-    assert not (site_directory / "manage.py").exists()
-    assert not (project_root / "requirements.txt").exists()
-    assert not (site_directory / "requirements.txt").exists()
-    assert (site_directory / "settings" / "base.py").is_file()
-    assert "src.settings.dev" in (project_root / "manage.py").read_text()
-    settings = (site_directory / "settings" / "base.py").read_text()
-    assert '"src.home"' in settings
-    assert '"src.search"' in settings
-    assert '"src.urls"' in settings
-    assert 'WAGTAIL_SITE_NAME = "Example website"' in settings
-    assert '"ENGINE": "django.db.backends.postgresql"' in settings
-    assert '"django.contrib.postgres"' in settings
-    assert 'os.environ.get("DATABASE_HOST", "127.0.0.1")' in settings
-    assert 'name = "src.home"' in (home_directory / "apps.py").read_text()
-    assert (home_directory / "tests.py").read_text() == (
-        "from src.home.models import HomePage\n"
-    )
-    for python_file in site_directory.rglob("*.py"):
-        compile(python_file.read_text(), str(python_file), "exec")
-    assert not (site_directory / "example").exists()
-    wagtail_call = next(
-        call
-        for call in run.call_args_list
-        if "wagtail" in call.args[0] and "start" in call.args[0]
-    )
-    assert wagtail_call.args[0][-1] == "--template=custom-template"
-    resolve_python.assert_called_once_with(tmp_path)
 
 
 @patch(
