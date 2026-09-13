@@ -47,6 +47,22 @@ def test_reset_refuses_other_directory(destination: Path, tmp_path: Path) -> Non
 
 
 @pytest.mark.parametrize(
+    ("arguments", "reset", "site_subfolder"),
+    [
+        ([], False, None),
+        (["--reset"], True, None),
+        (["--site-directory", "src"], False, Path("src")),
+    ],
+)
+def test_parse_arguments_returns_explicit_options(
+    arguments: list[str], reset: bool, site_subfolder: Path | None
+) -> None:
+    options = playground.parse_arguments(arguments)
+    assert options.reset is reset
+    assert options.site_subfolder == site_subfolder
+
+
+@pytest.mark.parametrize(
     ("arguments", "site_subfolder"),
     [
         ([], None),
@@ -110,6 +126,51 @@ def test_generation_failure_does_not_start_server(
     monkeypatch.setattr(playground.subprocess, "run", run)
     assert playground.main([]) == 1
     run.assert_not_called()
+
+
+def test_generation_failure_does_not_leave_playground_marker(
+    destination: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(playground, "run_wagtail_start", Mock(return_value=1))
+    assert playground.generate_playground(destination, None) == 1
+    assert not (destination / playground.MARKER).exists()
+
+
+def test_playground_steps_have_independent_command_boundaries(
+    destination: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run = Mock(return_value=Mock(returncode=0))
+    monkeypatch.setattr(playground.subprocess, "run", run)
+    environment = {"PATH": "/usr/bin"}
+
+    assert playground.prepare_playground(destination, environment) == 0
+    assert playground.create_playground_administrator(destination, environment) == 0
+    assert playground.check_playground(destination, environment) == 0
+
+    commands = [
+        call.args[0][len(playground.UV_COMMAND) :] for call in run.call_args_list
+    ]
+    assert commands == [
+        ["sync", "--locked"],
+        ["run", "python", "manage.py", "migrate", "--noinput"],
+        [
+            "run",
+            "python",
+            "manage.py",
+            "createsuperuser",
+            "--noinput",
+            "--username",
+            "admin",
+            "--email",
+            "admin@example.test",
+        ],
+        ["run", "python", "manage.py", "check"],
+    ]
+    assert run.call_args_list[0].kwargs["env"] is environment
+    assert (
+        run.call_args_list[2].kwargs["env"]["DJANGO_SUPERUSER_PASSWORD"] == "playground"
+    )
+    assert "DJANGO_SUPERUSER_PASSWORD" not in environment
 
 
 @pytest.mark.parametrize("failure_step", [2, 3])

@@ -134,6 +134,20 @@ Python.
 Prefer the standard library over new runtime dependencies. Treat UV as an external
 prerequisite and install Wagtail into each generated project's environment.
 
+## Module responsibilities
+
+| Module | Responsibility |
+| --- | --- |
+| `cli.py` | Parse user-facing options and enforce the ordinary generation boundary. |
+| `planning.py` | Build typed project, dependency, command, and rendered-file plans. |
+| `commands.py` | Run external commands and provide consistent operational errors. |
+| `wagtail.py` | Resolve versions, execute staged plans, configure projects, and publish them. |
+| `transformations.py` | Adapt Wagtail's generated package for source-subfolder layouts. |
+| `rendering.py` | Load, render, validate, and write packaged templates. |
+| `developer_tools.py` | Plan and apply database, Docker, formatter, and development tooling files. |
+| `playground.py` | Rebuild and serve the disposable in-checkout developer site. |
+| `safety.py` | Validate source packages, checkout boundaries, and permitted destinations. |
+
 ## External commands
 
 `commands.py` owns subprocess execution and translates launch failures and nonzero
@@ -173,5 +187,13 @@ A failed command raises immediately, so later steps and
 publication do not run. The execution boundary reports the error and preserves
 the child exit code; launch errors and planning failures return 2. Wagtail stays
 in the generated project's environment rather than becoming a generator runtime
-dependency. The playground and generated standalone scripts retain their own
-execution paths for now.
+dependency.
+
+`playground.py` is the disposable in-checkout workflow. `parse_arguments()` only
+validates the two supported choices, then `main()` resets the recognized directory,
+calls the generator, and runs explicit `prepare_playground()`,
+`create_playground_administrator()`, `check_playground()`, and `serve_playground()`
+steps. Each step receives its command and environment directly; command names are
+not inspected to decide whether to add credentials or print server information.
+The marker is written only after generation succeeds, and reset refuses symlinks or
+unrecognized directories.
