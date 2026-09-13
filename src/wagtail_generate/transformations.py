@@ -127,32 +127,6 @@ def rewrite_python_files(
             python_file.write_text(updated)
 
 
-def adjust_generated_settings(
-    generated_directory: Path, destination_module: str
-) -> None:
-    """Validate and update the generated settings module."""
-    settings_file = generated_directory / "settings" / "base.py"
-    if not settings_file.is_file():
-        raise ProjectStructureError(
-            "Wagtail did not generate the expected settings/base.py file"
-        )
-    settings_file.write_text(
-        adjust_settings(settings_file.read_text(), destination_module)
-    )
-
-
-def adjust_generated_app_config(
-    generated_directory: Path, destination_module: str
-) -> None:
-    """Validate and update the generated home app configuration."""
-    app_file = generated_directory / "home" / "apps.py"
-    if not app_file.is_file():
-        raise ProjectStructureError(
-            "Wagtail did not generate the expected home/apps.py file"
-        )
-    app_file.write_text(adjust_app_config(app_file.read_text(), destination_module))
-
-
 def flatten_project_package(
     generated_directory: Path,
     project_name: str,
@@ -163,5 +137,9 @@ def flatten_project_package(
     move_project_package(generated_directory, project_name)
     ensure_package_markers(generated_directory, destination_module)
     rewrite_python_files(generated_directory, project_name, destination_module)
-    adjust_generated_settings(generated_directory, destination_module)
-    adjust_generated_app_config(generated_directory, destination_module)
+    settings_file = generated_directory / "settings" / "base.py"
+    settings_file.write_text(
+        adjust_settings(settings_file.read_text(), destination_module)
+    )
+    app_file = generated_directory / "home" / "apps.py"
+    app_file.write_text(adjust_app_config(app_file.read_text(), destination_module))

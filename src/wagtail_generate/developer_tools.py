@@ -52,23 +52,6 @@ def configure_database(settings_file: Path, database: str, project_name: str) ->
     settings_file.write_text(content)
 
 
-def write_developer_tooling(
-    project_directory: Path,
-    project_name: str,
-    settings_module: str,
-    database: str,
-    python_version: str,
-) -> None:
-    """Render Docker, Compose, formatter, pre-commit, and environment files."""
-    plan = build_developer_tooling_plan(
-        project_name=project_name,
-        settings_module=settings_module,
-        database=database,
-        python_version=python_version,
-    )
-    apply_developer_tooling_plan(project_directory, plan)
-
-
 def build_developer_tooling_plan(
     project_name: str,
     settings_module: str,

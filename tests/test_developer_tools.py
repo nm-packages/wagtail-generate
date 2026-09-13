@@ -4,9 +4,10 @@ from pathlib import Path
 
 from wagtail_generate.developer_tools import (
     _append_tool_configuration,
+    apply_developer_tooling_plan,
+    build_developer_tooling_plan,
     configure_database,
     database_driver,
-    write_developer_tooling,
 )
 
 
@@ -34,12 +35,14 @@ def test_mysql_settings_and_tooling_are_consistent(tmp_path: Path) -> None:
     )
 
     configure_database(settings, "mysql", "example")
-    write_developer_tooling(
+    apply_developer_tooling_plan(
         project_directory=tmp_path,
-        project_name="example",
-        settings_module="src.settings",
-        database="mysql",
-        python_version="3.14",
+        plan=build_developer_tooling_plan(
+            project_name="example",
+            settings_module="src.settings",
+            database="mysql",
+            python_version="3.14",
+        ),
     )
 
     content = settings.read_text()
@@ -96,12 +99,14 @@ def test_sqlite_needs_no_server_or_database_driver(tmp_path: Path) -> None:
     )
 
     configure_database(settings, "sqlite3", "example")
-    write_developer_tooling(
+    apply_developer_tooling_plan(
         project_directory=tmp_path,
-        project_name="example",
-        settings_module="example.settings",
-        database="sqlite3",
-        python_version="3.15",
+        plan=build_developer_tooling_plan(
+            project_name="example",
+            settings_module="example.settings",
+            database="sqlite3",
+            python_version="3.15",
+        ),
     )
 
     content = settings.read_text()
