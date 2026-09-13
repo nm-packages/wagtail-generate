@@ -156,7 +156,7 @@ prerequisite and install Wagtail into each generated project's environment.
 | `cli.py` | Parse user-facing options and enforce the ordinary generation boundary. |
 | `planning.py` | Build typed project, dependency, command, and rendered-file plans. |
 | `commands.py` | Run external commands and provide consistent operational errors. |
-| `wagtail.py` | Resolve versions, execute staged plans, configure projects, and publish them. |
+| `generation.py` | Resolve versions, execute staged plans, configure projects, and publish them. |
 | `transformations.py` | Adapt Wagtail's generated package for source-subfolder layouts. |
 | `rendering.py` | Load, render, validate, and write packaged templates. |
 | `developer_tools.py` | Plan and apply database, Docker, formatter, and development tooling files. |
@@ -177,7 +177,7 @@ documentation. `build_generation_plan()` assembles these with the developer-tool
 plan without running commands or writing the destination. Its helpers group setup,
 Wagtail start, formatting, and documentation planning by purpose.
 
-`wagtail.py` validates the generation boundary, resolves Python and dependencies,
+`generation.py` validates the generation boundary, resolves Python and dependencies,
 and passes the completed plan to `execute_generation_plan()`. That function owns
 staging, cleanup, publication, and execution error reporting. Inside staging,
 `_execute_generation_plan_in_directory()` reads in execution order:

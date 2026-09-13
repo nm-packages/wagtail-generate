@@ -9,7 +9,7 @@ from zipfile import ZipFile
 
 import pytest
 
-from wagtail_generate.wagtail import (
+from wagtail_generate.generation import (
     UV_COMMAND,
     ProjectOptions,
     _publish_generated_project,

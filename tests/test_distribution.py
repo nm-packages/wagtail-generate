@@ -90,7 +90,7 @@ def test_release_artifacts_include_license(tmp_path: Path) -> None:
             str(python),
             "-c",
             "from wagtail_generate.rendering import template_text; "
-            "from wagtail_generate.wagtail import ("
+            "from wagtail_generate.generation import ("
             "ProjectOptions, build_generation_plan); "
             "from pathlib import Path; "
             "assert 'Wagtail CMS project' in template_text('README.md.jinja'); "
@@ -111,7 +111,7 @@ def test_release_artifacts_include_license(tmp_path: Path) -> None:
                     str(python),
                     "-c",
                     "from pathlib import Path; "
-                    "from wagtail_generate.wagtail import ("
+                    "from wagtail_generate.generation import ("
                     "ProjectOptions, build_generation_plan); "
                     "import sys; "
                     "options = ProjectOptions('example', 'Example', sys.argv[1], "

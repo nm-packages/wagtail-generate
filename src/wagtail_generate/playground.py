@@ -9,8 +9,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from wagtail_generate.generation import UV_COMMAND, run_wagtail_start
 from wagtail_generate.safety import source_checkout_root
-from wagtail_generate.wagtail import UV_COMMAND, run_wagtail_start
 
 MARKER = ".wagtail-generate-playground"
 

@@ -1,4 +1,4 @@
-"""Tests for the Wagtail command integration."""
+"""Tests for the project generation workflow."""
 
 import subprocess
 from pathlib import Path
@@ -7,20 +7,20 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from wagtail_generate.planning import Database, ResolvedDependencies
-from wagtail_generate.wagtail import (
+from wagtail_generate.generation import (
     _flatten_project_package,
     latest_stable_python_version,
     resolve_dependencies,
     run_wagtail_start,
 )
+from wagtail_generate.planning import Database, ResolvedDependencies
 
 
 @pytest.fixture(autouse=True)
 def stub_dependency_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep command-order tests focused on execution after planning."""
     monkeypatch.setattr(
-        "wagtail_generate.wagtail.resolve_dependencies",
+        "wagtail_generate.generation.resolve_dependencies",
         lambda database, python_version: (
             ResolvedDependencies(
                 runtime=("wagtail",),
@@ -107,7 +107,7 @@ def test_generation_boundary_rejects_source_checkout(
 ) -> None:
     checkout = tmp_path / "checkout"
     monkeypatch.setattr(
-        "wagtail_generate.wagtail.source_checkout_root", lambda: checkout
+        "wagtail_generate.generation.source_checkout_root", lambda: checkout
     )
     assert run_wagtail_start("example", project_root=checkout / "generated") == 2
     assert "source checkout" in capsys.readouterr().err
@@ -220,7 +220,7 @@ def write_mock_wagtail_project(
 
 
 @patch(
-    "wagtail_generate.wagtail.latest_stable_python_version",
+    "wagtail_generate.generation.latest_stable_python_version",
     return_value="3.14",
 )
 @patch("wagtail_generate.commands.subprocess.run")
@@ -406,7 +406,7 @@ def test_run_wagtail_start_streams_native_command(
 
 
 @patch(
-    "wagtail_generate.wagtail.latest_stable_python_version",
+    "wagtail_generate.generation.latest_stable_python_version",
     return_value="3.14",
 )
 @patch("wagtail_generate.commands.subprocess.run")
@@ -441,7 +441,7 @@ def test_run_wagtail_start_stops_after_failed_uv_command(
 
 
 @patch(
-    "wagtail_generate.wagtail.latest_stable_python_version",
+    "wagtail_generate.generation.latest_stable_python_version",
     return_value="3.14",
 )
 @patch("wagtail_generate.commands.subprocess.run")
@@ -471,7 +471,7 @@ def test_run_wagtail_start_defaults_to_sqlite_without_driver(
 
 
 @patch(
-    "wagtail_generate.wagtail.latest_stable_python_version",
+    "wagtail_generate.generation.latest_stable_python_version",
     return_value="3.14",
 )
 @patch("wagtail_generate.commands.subprocess.run")
@@ -666,7 +666,7 @@ def test_missing_executable_returns_cli_error_without_publishing(
 ) -> None:
     if stage != "discovery":
         monkeypatch.setattr(
-            "wagtail_generate.wagtail.latest_stable_python_version", lambda _: "3.14"
+            "wagtail_generate.generation.latest_stable_python_version", lambda _: "3.14"
         )
     run.side_effect = FileNotFoundError("uvx unavailable")
     destination = tmp_path / "generated"
@@ -687,7 +687,7 @@ def test_missing_executable_returns_cli_error_without_publishing(
     run.assert_called_once()
 
 
-@patch("wagtail_generate.wagtail.latest_stable_python_version", return_value="3.14")
+@patch("wagtail_generate.generation.latest_stable_python_version", return_value="3.14")
 @patch(
     "wagtail_generate.planning.plan_template",
     side_effect=ValueError("invalid template"),
@@ -710,7 +710,7 @@ def test_documentation_planning_failure_prevents_execution(
 
 @pytest.mark.parametrize("subfolder", [None, Path("src"), Path("sites/cms")])
 @pytest.mark.parametrize("database", ["sqlite3", "postgresql", "mysql"])
-@patch("wagtail_generate.wagtail.latest_stable_python_version", return_value="3.14")
+@patch("wagtail_generate.generation.latest_stable_python_version", return_value="3.14")
 @patch("wagtail_generate.commands.subprocess.run")
 def test_workflow_configures_before_formatting_and_publishes_complete_site(
     run: Mock,
@@ -777,7 +777,7 @@ def test_workflow_configures_before_formatting_and_publishes_complete_site(
         ("configuration", "could not locate Wagtail's generated DATABASES setting", 2),
     ],
 )
-@patch("wagtail_generate.wagtail.latest_stable_python_version", return_value="3.14")
+@patch("wagtail_generate.generation.latest_stable_python_version", return_value="3.14")
 @patch("wagtail_generate.commands.subprocess.run")
 def test_workflow_failure_stops_before_formatting_and_cleans_staging(
     run: Mock,
@@ -822,7 +822,7 @@ def test_workflow_failure_stops_before_formatting_and_cleans_staging(
     assert not list(tmp_path.glob(".generated-*"))
 
 
-@patch("wagtail_generate.wagtail.latest_stable_python_version", return_value="3.14")
+@patch("wagtail_generate.generation.latest_stable_python_version", return_value="3.14")
 @patch("wagtail_generate.commands.subprocess.run")
 def test_workflow_preserves_destination_populated_during_generation(
     run: Mock,
