@@ -537,6 +537,38 @@ def test_latest_stable_python_version_uses_uv_download_catalog(run: Mock) -> Non
     )
 
 
+@pytest.mark.parametrize(
+    ("stdout", "message"),
+    [
+        ("{}", "invalid Python download list"),
+        ('[{"implementation":"pypy"}]', "stable CPython download"),
+    ],
+)
+@patch("wagtail_generate.commands.subprocess.run")
+def test_latest_stable_python_version_rejects_invalid_catalog(
+    run: Mock, stdout: str, message: str
+) -> None:
+    run.return_value = subprocess.CompletedProcess(
+        [], returncode=0, stdout=stdout, stderr=""
+    )
+
+    with pytest.raises(ValueError, match=message):
+        latest_stable_python_version(Path("generated"))
+
+
+@patch("wagtail_generate.commands.subprocess.run")
+def test_latest_stable_python_version_skips_non_mapping_entries(run: Mock) -> None:
+    run.return_value = subprocess.CompletedProcess(
+        [],
+        returncode=0,
+        stdout='["not-a-download", {"implementation":"cpython",'
+        '"variant":"default", "version":"3.14.2"}]',
+        stderr="",
+    )
+
+    assert latest_stable_python_version(Path("generated")) == "3.14"
+
+
 @patch("wagtail_generate.commands.subprocess.run")
 def test_subfolder_generation_refuses_root_file_conflict(
     run: Mock,

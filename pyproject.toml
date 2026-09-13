@@ -25,6 +25,7 @@ dev = [
   "mypy>=1.17",
   "pre-commit>=4.6.2",
   "pytest>=8.4",
+  "pytest-cov>=7.1.0",
   "ruff>=0.12",
 ]
 
@@ -35,6 +36,18 @@ artifacts = ["src/wagtail_generate/templates/**"]
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["src/wagtail_generate"]
+omit = ["*/__main__.py"]
+
+[tool.coverage.report]
+precision = 1
+skip_empty = true
+exclude_also = [
+    "if __name__ == .__main__.:",
+]
 
 [tool.ruff]
 line-length = 88

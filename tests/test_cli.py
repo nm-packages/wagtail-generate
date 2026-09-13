@@ -31,6 +31,25 @@ def test_cli_reports_version(capsys: pytest.CaptureFixture[str]) -> None:
     assert output.strip() == f"wagtail-generate {__version__}"
 
 
+@pytest.mark.parametrize(
+    ("value", "normalized"),
+    [("123site", "site_123site"), ("class", "class_site")],
+)
+def test_normalize_package_name_avoids_invalid_python_names(
+    value: str, normalized: str
+) -> None:
+    assert normalize_package_name(value) == normalized
+
+
+def test_subfolder_prompt_retries_invalid_answer(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    responses = iter(["maybe", "no"])
+
+    assert prompt_for_site_subfolder("example", lambda _: next(responses)) is None
+    assert "Please answer yes or no." in capsys.readouterr().out
+
+
 @patch("wagtail_generate.cli.run_wagtail_start")
 def test_start_rejects_removed_layout_option(
     run_start: Mock, capsys: pytest.CaptureFixture[str]
@@ -214,6 +233,115 @@ def test_start_refuses_nonempty_site_name_directory(
     assert ".hidden-file" in error
     run_start.assert_not_called()
     find_checkout.assert_called_once_with()
+
+
+@patch("wagtail_generate.cli.run_wagtail_start")
+def test_start_rejects_invalid_project_name(
+    run_start: Mock,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    result = main(["start", "!!!", "--site-name", "Example"])
+
+    assert result == 2
+    assert "name must contain at least one letter or number" in capsys.readouterr().err
+    run_start.assert_not_called()
+
+
+@patch("wagtail_generate.cli.run_wagtail_start")
+def test_start_reports_eof_while_prompting_for_site_name(
+    run_start: Mock,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def raise_eof(_: str) -> str:
+        raise EOFError
+
+    monkeypatch.setattr("builtins.input", raise_eof)
+    assert main(["start", "example"]) == 2
+    assert "site name is required" in capsys.readouterr().err
+    run_start.assert_not_called()
+
+
+@patch("wagtail_generate.cli.run_wagtail_start")
+def test_start_rejects_project_root_that_is_not_a_directory(
+    run_start: Mock,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    destination = tmp_path / "project"
+    destination.write_text("not a directory")
+
+    result = main(
+        [
+            "start",
+            "example",
+            "--site-name",
+            "Example",
+            "--directory",
+            str(destination),
+            "--site-directory",
+            ".",
+        ]
+    )
+
+    assert result == 2
+    assert "project root is not a directory" in capsys.readouterr().err
+    run_start.assert_not_called()
+
+
+@patch("wagtail_generate.cli.run_wagtail_start")
+def test_start_summarizes_many_existing_entries(
+    run_start: Mock,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    for index in range(6):
+        (tmp_path / f"entry-{index}").touch()
+
+    result = main(
+        [
+            "start",
+            "example",
+            "--site-name",
+            "Example",
+            "--directory",
+            str(tmp_path),
+            "--site-directory",
+            ".",
+        ]
+    )
+
+    assert result == 2
+    assert "and 1 more" in capsys.readouterr().err
+    run_start.assert_not_called()
+
+
+@patch("wagtail_generate.cli.run_wagtail_start")
+def test_start_reports_eof_while_prompting_for_source_location(
+    run_start: Mock,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def raise_eof(_: str) -> str:
+        raise EOFError
+
+    monkeypatch.setattr("builtins.input", raise_eof)
+    assert (
+        main(
+            [
+                "start",
+                "example",
+                "--site-name",
+                "Example",
+                "--directory",
+                str(tmp_path),
+            ]
+        )
+        == 2
+    )
+    assert "source location is required" in capsys.readouterr().err
+    run_start.assert_not_called()
 
 
 @pytest.mark.parametrize("subfolder", ["site", "Site", "site/example", "json"])

@@ -5,7 +5,12 @@ from pathlib import Path
 import pytest
 from jinja2 import UndefinedError
 
-from wagtail_generate.rendering import render_template, template_text, write_template
+from wagtail_generate.rendering import (
+    plan_template,
+    render_template,
+    template_text,
+    write_template,
+)
 
 
 def test_packaged_static_template_can_be_read() -> None:
@@ -27,6 +32,12 @@ def test_generated_ignore_rules_only_exclude_root_output_directories() -> None:
 def test_rendering_requires_every_template_value() -> None:
     with pytest.raises(UndefinedError):
         render_template("env/postgresql.example.jinja", {})
+
+
+@pytest.mark.parametrize("destination", [Path("/outside.txt"), Path("../outside.txt")])
+def test_template_plans_cannot_escape_the_project_root(destination: Path) -> None:
+    with pytest.raises(ValueError, match="stay inside"):
+        plan_template(destination, "static/gitignore")
 
 
 def test_sqlite_readme_quick_start_does_not_require_env_file() -> None:

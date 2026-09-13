@@ -188,6 +188,37 @@ def test_setup_failure_stops_before_server(
     assert run.call_count == failure_step + 1
 
 
+def test_prepare_failure_stops_before_migrations(
+    destination: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run = Mock(side_effect=[Mock(returncode=1)])
+    monkeypatch.setattr(playground.subprocess, "run", run)
+
+    assert playground.prepare_playground(destination, {"PATH": "/usr/bin"}) == 1
+    assert run.call_count == 1
+
+
+def test_main_reports_playground_validation_errors(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(
+        playground, "playground_directory", Mock(side_effect=ValueError("unsafe"))
+    )
+
+    assert playground.main([]) == 2
+    assert "error: unsafe" in capsys.readouterr().err
+
+
+def test_main_converts_keyboard_interrupt_to_shell_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        playground, "playground_directory", Mock(side_effect=KeyboardInterrupt)
+    )
+
+    assert playground.main([]) == 130
+
+
 @pytest.mark.parametrize("value", ["../src", "/tmp/src", "invalid"])
 def test_invalid_site_directory_does_not_reset(
     destination: Path, monkeypatch: pytest.MonkeyPatch, value: str
