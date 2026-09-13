@@ -9,12 +9,12 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from wagtail_generate import __version__
+from wagtail_generate.generation import Database, run_wagtail_start
 from wagtail_generate.safety import (
     destination_is_in_source_checkout,
     source_checkout_root,
     validate_source_package,
 )
-from wagtail_generate.wagtail import Database, run_wagtail_start
 
 
 def normalize_package_name(value: str) -> str:

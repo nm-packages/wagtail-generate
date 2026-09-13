@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from wagtail_generate.wagtail import _set_wagtail_site_name
+from wagtail_generate.generation import _set_wagtail_site_name
 
 
 @pytest.mark.parametrize(
