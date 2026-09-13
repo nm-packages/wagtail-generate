@@ -6,12 +6,21 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 from wagtail_generate.safety import source_checkout_root
 from wagtail_generate.wagtail import UV_COMMAND, run_wagtail_start
 
 MARKER = ".wagtail-generate-playground"
+
+
+@dataclass(frozen=True)
+class PlaygroundOptions:
+    """Validated command-line choices for the disposable playground."""
+
+    reset: bool
+    site_subfolder: Path | None
 
 
 def playground_directory() -> Path:
@@ -37,8 +46,8 @@ def reset_playground(destination: Path) -> None:
     shutil.rmtree(destination)
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """Rebuild, validate, and serve the playground, or explicitly reset it."""
+def parse_arguments(argv: Sequence[str] | None = None) -> PlaygroundOptions:
+    """Parse playground options without inspecting or changing the checkout."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--reset", action="store_true", help="Remove the playground only"
@@ -50,61 +59,129 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Generate Wagtail code at the project root (default) or in src/",
     )
     arguments = parser.parse_args(argv)
+    return PlaygroundOptions(
+        reset=arguments.reset,
+        site_subfolder=(Path("src") if arguments.site_directory == "src" else None),
+    )
+
+
+def playground_environment() -> dict[str, str]:
+    """Return an environment that uses the playground's own UV environment."""
+    environment = os.environ.copy()
+    environment.pop("VIRTUAL_ENV", None)
+    return environment
+
+
+def run_playground_command(
+    destination: Path,
+    arguments: Sequence[str],
+    environment: dict[str, str],
+) -> int:
+    """Run one explicit UV command in the generated playground."""
+    return subprocess.run(
+        [*UV_COMMAND, *arguments],
+        cwd=destination,
+        env=environment,
+        check=False,
+    ).returncode
+
+
+def generate_playground(destination: Path, site_subfolder: Path | None) -> int:
+    """Generate the disposable Wagtail project and mark it as recognized."""
+    result = run_wagtail_start(
+        project_name="playground",
+        site_name="Developer Playground",
+        project_root=destination,
+        database="sqlite3",
+        site_subfolder=site_subfolder,
+        allow_playground=True,
+    )
+    if result == 0:
+        (destination / MARKER).touch()
+    return result
+
+
+def prepare_playground(destination: Path, environment: dict[str, str]) -> int:
+    """Install the lockfile and apply migrations before application setup."""
+    for command in (
+        ("sync", "--locked"),
+        ("run", "python", "manage.py", "migrate", "--noinput"),
+    ):
+        result = run_playground_command(destination, command, environment)
+        if result:
+            return result
+    return 0
+
+
+def create_playground_administrator(
+    destination: Path, environment: dict[str, str]
+) -> int:
+    """Create the known disposable administrator with an isolated password env."""
+    administrator_environment = environment.copy()
+    administrator_environment["DJANGO_SUPERUSER_PASSWORD"] = "playground"
+    return run_playground_command(
+        destination,
+        (
+            "run",
+            "python",
+            "manage.py",
+            "createsuperuser",
+            "--noinput",
+            "--username",
+            "admin",
+            "--email",
+            "admin@example.test",
+        ),
+        administrator_environment,
+    )
+
+
+def check_playground(destination: Path, environment: dict[str, str]) -> int:
+    """Run Django's system checks before starting the development server."""
+    return run_playground_command(
+        destination,
+        ("run", "python", "manage.py", "check"),
+        environment,
+    )
+
+
+def serve_playground(destination: Path, environment: dict[str, str]) -> int:
+    """Show playground credentials and serve the site on the documented address."""
+    print(
+        "Playground admin: http://127.0.0.1:8000/admin/ "
+        "(username: admin, password: playground)",
+        flush=True,
+    )
+    return run_playground_command(
+        destination,
+        ("run", "python", "manage.py", "runserver", "127.0.0.1:8000"),
+        environment,
+    )
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Rebuild, validate, and serve the playground, or explicitly reset it."""
+    options = parse_arguments(argv)
     try:
         destination = playground_directory()
         reset_playground(destination)
-        if arguments.reset:
+        if options.reset:
             print("Playground reset.")
             return 0
-        result = run_wagtail_start(
-            project_name="playground",
-            site_name="Developer Playground",
-            project_root=destination,
-            database="sqlite3",
-            site_subfolder=(Path("src") if arguments.site_directory == "src" else None),
-            allow_playground=True,
-        )
+        result = generate_playground(destination, options.site_subfolder)
         if result:
             return result
-        (destination / MARKER).touch()
-        # Do not let the generator's active UV environment select its own venv.
-        environment = os.environ.copy()
-        environment.pop("VIRTUAL_ENV", None)
-        for command in (
-            ("sync", "--locked"),
-            ("run", "python", "manage.py", "migrate", "--noinput"),
-            (
-                "run",
-                "python",
-                "manage.py",
-                "createsuperuser",
-                "--noinput",
-                "--username",
-                "admin",
-                "--email",
-                "admin@example.test",
-            ),
-            ("run", "python", "manage.py", "check"),
-            ("run", "python", "manage.py", "runserver", "127.0.0.1:8000"),
+        environment = playground_environment()
+        for step in (
+            prepare_playground,
+            create_playground_administrator,
+            check_playground,
+            serve_playground,
         ):
-            command_environment = environment.copy()
-            if "createsuperuser" in command:
-                command_environment["DJANGO_SUPERUSER_PASSWORD"] = "playground"
-            if "runserver" in command:
-                print(
-                    "Playground admin: http://127.0.0.1:8000/admin/ "
-                    "(username: admin, password: playground)",
-                    flush=True,
-                )
-            result = subprocess.run(
-                [*UV_COMMAND, *command],
-                cwd=destination,
-                env=command_environment,
-                check=False,
-            ).returncode
+            result = step(destination, environment)
             if result:
                 return result
-        return 0
+        return result
     except (OSError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
