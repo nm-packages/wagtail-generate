@@ -17,7 +17,6 @@ from wagtail_generate.developer_tools import (
     configure_database,
     database_driver,
 )
-from wagtail_generate.layouts import STANDARD_LAYOUT, Layout
 from wagtail_generate.rendering import RenderedFile, plan_template, write_rendered_files
 from wagtail_generate.safety import (
     destination_is_in_source_checkout,
@@ -51,7 +50,6 @@ class ProjectOptions:
     project_root: Path
     site_subfolder: Path | None
     template: Path | None
-    layout: Layout = STANDARD_LAYOUT
 
     @property
     def source_directory(self) -> str:
@@ -94,7 +92,6 @@ def run_wagtail_start(
     project_root: Path | None = None,
     site_subfolder: Path | None = None,
     template: Path | None = None,
-    layout: Layout = STANDARD_LAYOUT,
     allow_playground: bool = False,
     dependency_resolver: DependencyResolver | None = None,
 ) -> int:
@@ -107,7 +104,6 @@ def run_wagtail_start(
         project_root=project_directory,
         site_subfolder=site_subfolder,
         template=template,
-        layout=layout,
     )
 
     try:
@@ -243,12 +239,11 @@ def build_generation_plan(
         "source_directory": options.source_directory,
         "settings_module": options.settings_module,
         "database": options.database,
-        "layout": options.layout.name,
     }
     documentation_files = (
         plan_template(
             "AGENTS.md",
-            options.layout.agents_template,
+            "AGENTS.md.jinja",
             documentation_context | {"template_description": template_description},
             overwrite=False,
         ),
@@ -263,7 +258,7 @@ def build_generation_plan(
         ),
         plan_template(
             "README.md",
-            options.layout.readme_template,
+            "README.md.jinja",
             documentation_context
             | {
                 "database_name": {

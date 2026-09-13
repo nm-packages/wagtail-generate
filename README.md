@@ -1,8 +1,8 @@
 # wagtail-generate
 
-A UV-installable CLI for creating Wagtail CMS projects with a repeatable codebase
-layout. The standard layout includes UV and Docker development, SQLite (with
-PostgreSQL and MySQL options), formatting tools, and pre-commit hooks.
+A UV-installable CLI for creating Wagtail CMS projects with UV and Docker
+development, SQLite (with PostgreSQL and MySQL options), formatting tools, and
+pre-commit hooks.
 
 ## Quick start
 
@@ -42,7 +42,6 @@ Run `wagtail-generate start --help` for all flags and defaults. Running
   uses a source subfolder. UV files and `manage.py` remain at the root.
 - `--database postgresql` or `--database mysql` selects a server database;
   SQLite is the default. Server database development uses Docker Compose.
-- `--layout standard` selects the current generator layout (the default).
-  `--template PATH` supplies a custom local Wagtail project template.
+- `--template PATH` supplies a custom local Wagtail project template.
 
 See [Developer guide](docs/development.md) to develop the generator or try its playground.

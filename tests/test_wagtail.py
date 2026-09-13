@@ -248,7 +248,6 @@ def test_run_wagtail_start_streams_native_command(
     assert readme.startswith("# Example website")
     assert "Site source: `src`" in readme
     assert "Django settings: `src.settings`" in readme
-    assert "Codebase layout: `standard`" in readme
     assert "Database: PostgreSQL" in readme
     assert "Python: 3.14" in readme
     assert "cp .env.example .env\nmake dev" in readme
@@ -261,7 +260,6 @@ def test_run_wagtail_start_streams_native_command(
     agents = (project_root / "AGENTS.md").read_text()
     assert "Example website" in agents
     assert "Python project package: `example`" in agents
-    assert "Codebase layout: `standard`" in agents
     assert "Site source directory: `src`" in agents
     assert "Django settings package: `src.settings`" in agents
     assert "Database: `postgresql`" in agents
