@@ -48,6 +48,15 @@ isolated environment and may need network access:
 WAGTAIL_GENERATE_TEST_DISTRIBUTION=1 uv run pytest tests/test_distribution.py
 ```
 
+The real-Wagtail compatibility smoke test exercises both supported source
+layouts against the installed Wagtail generator, then runs Django checks and
+migrations in each generated project. It is opt-in locally because it resolves
+and installs Wagtail and its development dependencies twice:
+
+```shell
+WAGTAIL_GENERATE_TEST_COMPATIBILITY=1 uv run pytest tests/test_wagtail_compatibility.py
+```
+
 Run all hooks with `uv run pre-commit run --all-files`. The pytest hook runs the
 full suite on every commit, including template-only and configuration-only
 changes. Verify a specific changed-file selection with
