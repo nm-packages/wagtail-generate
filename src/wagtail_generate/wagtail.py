@@ -5,19 +5,26 @@ import re
 import sys
 import tempfile
 from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
 
 from wagtail_generate.commands import GenerationError, run_command
 from wagtail_generate.developer_tools import (
-    DeveloperToolingPlan,
     apply_developer_tooling_plan,
-    build_developer_tooling_plan,
     configure_database,
     database_driver,
 )
-from wagtail_generate.rendering import RenderedFile, plan_template, write_rendered_files
+
+# Retain the existing imports for callers while planning owns these definitions.
+from wagtail_generate.planning import UV_COMMAND as UV_COMMAND
+from wagtail_generate.planning import UV_VERSION as UV_VERSION
+from wagtail_generate.planning import CommandPlan as CommandPlan
+from wagtail_generate.planning import Database as Database
+from wagtail_generate.planning import GenerationPlan as GenerationPlan
+from wagtail_generate.planning import ProjectOptions as ProjectOptions
+from wagtail_generate.planning import (
+    build_generation_plan as build_generation_plan,
+)
+from wagtail_generate.rendering import write_rendered_files
 from wagtail_generate.safety import (
     destination_is_in_source_checkout,
     source_checkout_root,
@@ -25,56 +32,7 @@ from wagtail_generate.safety import (
 )
 
 ROOT_FILES = (".dockerignore", "Dockerfile", "manage.py")
-UV_VERSION = "0.12.7"
-UV_COMMAND = ("uvx", f"uv@{UV_VERSION}")
-Database = Literal["sqlite3", "postgresql", "mysql"]
 DependencyResolver = Callable[[Database, str], tuple[str, ...]]
-
-
-@dataclass(frozen=True)
-class ProjectOptions:
-    """Validated user choices that determine a generated project."""
-
-    project_name: str
-    site_name: str
-    database: Database
-    project_root: Path
-    site_subfolder: Path | None
-    template: Path | None
-
-    @property
-    def source_directory(self) -> str:
-        """Return the source directory relative to the project root."""
-        return "." if self.site_subfolder is None else str(self.site_subfolder)
-
-    @property
-    def settings_module(self) -> str:
-        """Return the generated Django settings package."""
-        if self.site_subfolder is None:
-            return f"{self.project_name}.settings"
-        return f"{'.'.join(self.site_subfolder.parts)}.settings"
-
-
-@dataclass(frozen=True)
-class CommandPlan:
-    """One external command in a generation plan."""
-
-    arguments: tuple[str, ...]
-    description: str
-
-
-@dataclass(frozen=True)
-class GenerationPlan:
-    """A complete, rendered generation plan ready for side-effect execution."""
-
-    options: ProjectOptions
-    python_version: str
-    setup_commands: tuple[CommandPlan, ...]
-    wagtail_command: CommandPlan
-    formatting_commands: tuple[CommandPlan, ...]
-    developer_tooling: DeveloperToolingPlan
-    documentation_files: tuple[RenderedFile, ...]
-    resolved_dependencies: tuple[str, ...]
 
 
 def run_wagtail_start(
@@ -164,155 +122,6 @@ def _validate_generation_boundary(
     validate_source_package(options.settings_module.partition(".")[0])
 
 
-def build_generation_plan(
-    options: ProjectOptions,
-    python_version: str,
-    resolved_dependencies: tuple[str, ...] | None = None,
-) -> GenerationPlan:
-    """Render and validate every generator-owned action before writing files."""
-    validate_source_package(options.settings_module.partition(".")[0])
-    runtime_dependencies = ["wagtail"]
-    driver = database_driver(options.database)
-    if driver is not None:
-        runtime_dependencies.append(driver)
-    if resolved_dependencies is None:
-        resolved_dependencies = tuple(
-            runtime_dependencies + ["ruff", "djangofmt", "pre-commit"]
-        )
-    runtime_count = len(runtime_dependencies)
-    runtime_dependencies = list(resolved_dependencies[:runtime_count])
-    development_dependencies = list(resolved_dependencies[runtime_count:])
-
-    setup_commands = (
-        CommandPlan(
-            (
-                *UV_COMMAND,
-                "init",
-                "--bare",
-                "--no-workspace",
-                "--python",
-                python_version,
-                "--name",
-                options.project_name,
-            ),
-            "Initialize project",
-        ),
-        CommandPlan(
-            (*UV_COMMAND, "python", "pin", python_version), "Pin Python version"
-        ),
-        # Console scripts must keep working after the staged project is moved.
-        CommandPlan(
-            (*UV_COMMAND, "venv", "--relocatable", "--python", python_version),
-            "Create relocatable environment",
-        ),
-        CommandPlan(
-            (*UV_COMMAND, "add", *runtime_dependencies), "Install runtime dependencies"
-        ),
-        CommandPlan(
-            (*UV_COMMAND, "add", "--dev", *development_dependencies),
-            "Install development dependencies",
-        ),
-    )
-
-    wagtail_arguments = [
-        *UV_COMMAND,
-        "run",
-        "wagtail",
-        "start",
-        options.project_name,
-        options.source_directory,
-    ]
-    if options.template is not None:
-        wagtail_arguments.append(f"--template={options.template}")
-
-    tooling = build_developer_tooling_plan(
-        project_name=options.project_name,
-        settings_module=options.settings_module,
-        database=options.database,
-        python_version=python_version,
-    )
-    template_description = (
-        f"custom template `{options.template}`"
-        if options.template is not None
-        else "the default Wagtail template"
-    )
-    documentation_context = {
-        "site_name": options.site_name,
-        "project_name": options.project_name,
-        "source_directory": options.source_directory,
-        "settings_module": options.settings_module,
-        "database": options.database,
-    }
-    documentation_files = (
-        plan_template(
-            "AGENTS.md",
-            "AGENTS.md.jinja",
-            documentation_context | {"template_description": template_description},
-            overwrite=False,
-        ),
-        *(
-            plan_template(
-                f"docs/agent-instructions/{name}.md",
-                f"docs/agent-instructions/{name}.md.jinja",
-                documentation_context,
-                overwrite=False,
-            )
-            for name in ("environment", "backend", "checks")
-        ),
-        plan_template(
-            "README.md",
-            "README.md.jinja",
-            documentation_context
-            | {
-                "database_name": {
-                    "sqlite3": "SQLite",
-                    "postgresql": "PostgreSQL",
-                    "mysql": "MySQL",
-                }[options.database],
-                "python_version": python_version,
-            },
-        ),
-    )
-    formatting_commands = (
-        CommandPlan(
-            (*UV_COMMAND, "run", "djangofmt", options.source_directory),
-            "Format Django templates",
-        ),
-        CommandPlan(
-            (
-                *UV_COMMAND,
-                "run",
-                "ruff",
-                "check",
-                "--fix",
-                options.source_directory,
-            ),
-            "Fix Python lint errors",
-        ),
-        CommandPlan(
-            (
-                *UV_COMMAND,
-                "run",
-                "ruff",
-                "format",
-                options.source_directory,
-                "manage.py",
-            ),
-            "Format Python source",
-        ),
-    )
-    return GenerationPlan(
-        options=options,
-        python_version=python_version,
-        setup_commands=setup_commands,
-        wagtail_command=CommandPlan(tuple(wagtail_arguments), "Generate Wagtail site"),
-        formatting_commands=formatting_commands,
-        developer_tooling=tooling,
-        documentation_files=documentation_files,
-        resolved_dependencies=resolved_dependencies,
-    )
-
-
 def resolve_dependencies(database: Database, python_version: str) -> tuple[str, ...]:
     """Resolve direct dependencies before any generation side effects."""
     requirements = ["wagtail"]
@@ -381,8 +190,18 @@ def _execute_generation_plan_in_directory(
     project_directory: Path,
 ) -> int:
     """Execute a validated plan inside an isolated directory."""
-    options = plan.options
+    _prepare_environment(plan, project_directory)
+    _generate_wagtail_site(plan, project_directory)
+    settings_file = _adapt_project_structure(plan.options, project_directory)
+    if settings_file is None:
+        return 2
+    _configure_project(plan, project_directory, settings_file)
+    _format_project(plan, project_directory)
+    return 0
 
+
+def _prepare_environment(plan: GenerationPlan, project_directory: Path) -> None:
+    """Create the relocatable UV environment and install planned dependencies."""
     for command in plan.setup_commands:
         run_command(
             command.arguments,
@@ -391,6 +210,10 @@ def _execute_generation_plan_in_directory(
             description=command.description,
         )
 
+
+def _generate_wagtail_site(plan: GenerationPlan, project_directory: Path) -> None:
+    """Create the source directory and run Wagtail in the prepared environment."""
+    options = plan.options
     if options.site_subfolder is not None:
         (project_directory / options.site_subfolder).mkdir(
             parents=True,
@@ -404,6 +227,14 @@ def _execute_generation_plan_in_directory(
         description=plan.wagtail_command.description,
     )
 
+
+def _adapt_project_structure(
+    options: ProjectOptions, project_directory: Path
+) -> Path | None:
+    """Arrange Wagtail's files for the chosen layout and locate its settings.
+
+    Return None when flattening reports a missing package or a file conflict.
+    """
     if options.site_subfolder is not None:
         generated_directory = project_directory / options.site_subfolder
         if not _flatten_project_package(
@@ -411,12 +242,8 @@ def _execute_generation_plan_in_directory(
             options.project_name,
             ".".join(options.site_subfolder.parts),
         ):
-            return 2
+            return None
 
-        _set_wagtail_site_name(
-            generated_directory / "settings" / "base.py",
-            options.site_name,
-        )
         (generated_directory / "requirements.txt").unlink(missing_ok=True)
         (generated_directory / "README.md").unlink(missing_ok=True)
         for filename in ROOT_FILES:
@@ -428,9 +255,17 @@ def _execute_generation_plan_in_directory(
         settings_file = (
             project_directory / options.project_name / "settings" / "base.py"
         )
-        _set_wagtail_site_name(settings_file, options.site_name)
         (project_directory / "requirements.txt").unlink(missing_ok=True)
 
+    return settings_file
+
+
+def _configure_project(
+    plan: GenerationPlan, project_directory: Path, settings_file: Path
+) -> None:
+    """Apply the site name, database, developer tooling, and planned documentation."""
+    options = plan.options
+    _set_wagtail_site_name(settings_file, options.site_name)
     configure_database(
         settings_file,
         options.database,
@@ -442,6 +277,9 @@ def _execute_generation_plan_in_directory(
     )
     write_rendered_files(project_directory, plan.documentation_files)
 
+
+def _format_project(plan: GenerationPlan, project_directory: Path) -> None:
+    """Run the planned formatters after configuration is complete."""
     for command in plan.formatting_commands:
         run_command(
             command.arguments,
@@ -449,8 +287,6 @@ def _execute_generation_plan_in_directory(
             stage="formatting",
             description=command.description,
         )
-
-    return 0
 
 
 def _publish_generated_project(staging_directory: Path, destination: Path) -> bool:
