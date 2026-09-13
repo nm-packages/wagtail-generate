@@ -2,7 +2,6 @@
 
 import json
 import re
-import subprocess
 import sys
 import tempfile
 from collections.abc import Callable
@@ -10,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from wagtail_generate.commands import GenerationError, run_command
 from wagtail_generate.developer_tools import (
     DeveloperToolingPlan,
     apply_developer_tooling_plan,
@@ -29,15 +29,6 @@ UV_VERSION = "0.12.7"
 UV_COMMAND = ("uvx", f"uv@{UV_VERSION}")
 Database = Literal["sqlite3", "postgresql", "mysql"]
 DependencyResolver = Callable[[Database, str], tuple[str, ...]]
-
-
-class GenerationError(RuntimeError):
-    """An expected operational failure while generating a project."""
-
-    def __init__(self, stage: str, message: str, returncode: int | None = None) -> None:
-        super().__init__(message)
-        self.stage = stage
-        self.returncode = returncode
 
 
 @dataclass(frozen=True)
@@ -69,6 +60,7 @@ class CommandPlan:
     """One external command in a generation plan."""
 
     arguments: tuple[str, ...]
+    description: str
 
 
 @dataclass(frozen=True)
@@ -202,13 +194,24 @@ def build_generation_plan(
                 python_version,
                 "--name",
                 options.project_name,
-            )
+            ),
+            "Initialize project",
         ),
-        CommandPlan((*UV_COMMAND, "python", "pin", python_version)),
+        CommandPlan(
+            (*UV_COMMAND, "python", "pin", python_version), "Pin Python version"
+        ),
         # Console scripts must keep working after the staged project is moved.
-        CommandPlan((*UV_COMMAND, "venv", "--relocatable", "--python", python_version)),
-        CommandPlan((*UV_COMMAND, "add", *runtime_dependencies)),
-        CommandPlan((*UV_COMMAND, "add", "--dev", *development_dependencies)),
+        CommandPlan(
+            (*UV_COMMAND, "venv", "--relocatable", "--python", python_version),
+            "Create relocatable environment",
+        ),
+        CommandPlan(
+            (*UV_COMMAND, "add", *runtime_dependencies), "Install runtime dependencies"
+        ),
+        CommandPlan(
+            (*UV_COMMAND, "add", "--dev", *development_dependencies),
+            "Install development dependencies",
+        ),
     )
 
     wagtail_arguments = [
@@ -271,7 +274,10 @@ def build_generation_plan(
         ),
     )
     formatting_commands = (
-        CommandPlan((*UV_COMMAND, "run", "djangofmt", options.source_directory)),
+        CommandPlan(
+            (*UV_COMMAND, "run", "djangofmt", options.source_directory),
+            "Format Django templates",
+        ),
         CommandPlan(
             (
                 *UV_COMMAND,
@@ -280,7 +286,8 @@ def build_generation_plan(
                 "check",
                 "--fix",
                 options.source_directory,
-            )
+            ),
+            "Fix Python lint errors",
         ),
         CommandPlan(
             (
@@ -290,14 +297,15 @@ def build_generation_plan(
                 "format",
                 options.source_directory,
                 "manage.py",
-            )
+            ),
+            "Format Python source",
         ),
     )
     return GenerationPlan(
         options=options,
         python_version=python_version,
         setup_commands=setup_commands,
-        wagtail_command=CommandPlan(tuple(wagtail_arguments)),
+        wagtail_command=CommandPlan(tuple(wagtail_arguments), "Generate Wagtail site"),
         formatting_commands=formatting_commands,
         developer_tooling=tooling,
         documentation_files=documentation_files,
@@ -315,7 +323,7 @@ def resolve_dependencies(database: Database, python_version: str) -> tuple[str, 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".in") as source:
         source.write("\n".join(requirements) + "\n")
         source.flush()
-        result = subprocess.run(
+        result = run_command(
             [
                 *UV_COMMAND,
                 "pip",
@@ -326,13 +334,10 @@ def resolve_dependencies(database: Database, python_version: str) -> tuple[str, 
                 "--no-annotate",
                 "--no-header",
             ],
-            check=False,
+            stage="resolution",
+            description="Resolve project dependencies",
             capture_output=True,
-            text=True,
         )
-    if result.returncode != 0:
-        detail = result.stderr.strip() or "UV could not resolve dependencies"
-        raise RuntimeError(detail)
     resolved = tuple(
         line.strip()
         for line in result.stdout.splitlines()
@@ -364,7 +369,7 @@ def execute_generation_plan(plan: GenerationPlan) -> int:
                 return 2
         return 0
     except GenerationError as error:
-        print(f"error: {error.stage}: {error}", file=sys.stderr)
+        print(f"error: {error}", file=sys.stderr)
         return error.returncode or 2
     except (OSError, ValueError) as error:
         print(f"error: generation: {error}", file=sys.stderr)
@@ -379,9 +384,12 @@ def _execute_generation_plan_in_directory(
     options = plan.options
 
     for command in plan.setup_commands:
-        result = _run_generation_command(command, project_directory, "setup")
-        if result.returncode != 0:
-            return result.returncode
+        run_command(
+            command.arguments,
+            cwd=project_directory,
+            stage="setup",
+            description=command.description,
+        )
 
     if options.site_subfolder is not None:
         (project_directory / options.site_subfolder).mkdir(
@@ -389,9 +397,12 @@ def _execute_generation_plan_in_directory(
             exist_ok=True,
         )
 
-    result = _run_generation_command(plan.wagtail_command, project_directory, "wagtail")
-    if result.returncode != 0:
-        return result.returncode
+    run_command(
+        plan.wagtail_command.arguments,
+        cwd=project_directory,
+        stage="wagtail",
+        description=plan.wagtail_command.description,
+    )
 
     if options.site_subfolder is not None:
         generated_directory = project_directory / options.site_subfolder
@@ -432,23 +443,14 @@ def _execute_generation_plan_in_directory(
     write_rendered_files(project_directory, plan.documentation_files)
 
     for command in plan.formatting_commands:
-        result = _run_generation_command(command, project_directory, "formatting")
-        if result.returncode != 0:
-            return result.returncode
+        run_command(
+            command.arguments,
+            cwd=project_directory,
+            stage="formatting",
+            description=command.description,
+        )
 
     return 0
-
-
-def _run_generation_command(
-    command: CommandPlan, project_directory: Path, stage: str
-) -> subprocess.CompletedProcess[bytes]:
-    """Run one command and translate missing executables into a stage error."""
-    try:
-        return subprocess.run(
-            list(command.arguments), cwd=project_directory, check=False
-        )
-    except OSError as error:
-        raise GenerationError(stage, str(error)) from error
 
 
 def _publish_generated_project(staging_directory: Path, destination: Path) -> bool:
@@ -493,7 +495,7 @@ def _nearest_existing_directory(path: Path) -> Path:
 
 def latest_stable_python_version(project_directory: Path) -> str:
     """Return the major/minor line of the newest stable CPython known to UV."""
-    result = subprocess.run(
+    result = run_command(
         [
             *UV_COMMAND,
             "python",
@@ -503,13 +505,10 @@ def latest_stable_python_version(project_directory: Path) -> str:
             "json",
         ],
         cwd=project_directory,
-        check=False,
+        stage="resolution",
+        description="Discover Python version",
         capture_output=True,
-        text=True,
     )
-    if result.returncode != 0:
-        detail = result.stderr.strip() or "UV could not list Python downloads"
-        raise RuntimeError(detail)
 
     downloads = json.loads(result.stdout)
     if not isinstance(downloads, list):

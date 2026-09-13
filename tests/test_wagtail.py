@@ -34,7 +34,7 @@ def stub_dependency_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-@patch("wagtail_generate.wagtail.subprocess.run")
+@patch("wagtail_generate.commands.subprocess.run")
 def test_resolve_dependencies_returns_pinned_direct_requirements(run: Mock) -> None:
     run.return_value = subprocess.CompletedProcess(
         [],
@@ -59,7 +59,7 @@ def test_resolve_dependencies_returns_pinned_direct_requirements(run: Mock) -> N
     )
 
 
-@patch("wagtail_generate.wagtail.subprocess.run")
+@patch("wagtail_generate.commands.subprocess.run")
 def test_resolve_dependencies_reports_resolution_failure(run: Mock) -> None:
     run.return_value = subprocess.CompletedProcess(
         [], returncode=1, stdout="", stderr="no matching distribution"
@@ -70,7 +70,7 @@ def test_resolve_dependencies_reports_resolution_failure(run: Mock) -> None:
 
 
 @pytest.mark.parametrize("subfolder", [Path("../outside"), Path("/absolute")])
-@patch("wagtail_generate.wagtail.subprocess.run")
+@patch("wagtail_generate.commands.subprocess.run")
 def test_generation_boundary_rejects_escaping_subfolders(
     run: Mock, subfolder: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -84,7 +84,7 @@ def test_generation_boundary_rejects_escaping_subfolders(
     run.assert_not_called()
 
 
-@patch("wagtail_generate.wagtail.subprocess.run")
+@patch("wagtail_generate.commands.subprocess.run")
 def test_generation_boundary_rejects_source_checkout(
     run: Mock,
     tmp_path: Path,
@@ -104,7 +104,7 @@ def test_generation_boundary_rejects_source_checkout(
     ("project_name", "subfolder"),
     [("site", None), ("example", Path("site")), ("example", Path("json/cms"))],
 )
-@patch("wagtail_generate.wagtail.subprocess.run")
+@patch("wagtail_generate.commands.subprocess.run")
 def test_source_package_conflict_is_rejected_before_external_commands(
     run: Mock,
     project_name: str,
@@ -128,7 +128,7 @@ def test_source_package_conflict_is_rejected_before_external_commands(
     ("project_name", "subfolder"),
     [("django", None), ("example", Path("django")), ("example", Path("wagtail/cms"))],
 )
-@patch("wagtail_generate.wagtail.subprocess.run")
+@patch("wagtail_generate.commands.subprocess.run")
 def test_dependency_conflict_is_rejected_before_external_commands(
     run: Mock,
     project_name: str,
@@ -205,7 +205,7 @@ def write_mock_wagtail_project(project_root: Path) -> None:
     "wagtail_generate.wagtail.latest_stable_python_version",
     return_value="3.14",
 )
-@patch("wagtail_generate.wagtail.subprocess.run")
+@patch("wagtail_generate.commands.subprocess.run")
 def test_run_wagtail_start_streams_native_command(
     run: Mock,
     resolve_python: Mock,
@@ -391,7 +391,7 @@ def test_run_wagtail_start_streams_native_command(
     "wagtail_generate.wagtail.latest_stable_python_version",
     return_value="3.14",
 )
-@patch("wagtail_generate.wagtail.subprocess.run")
+@patch("wagtail_generate.commands.subprocess.run")
 def test_run_wagtail_start_stops_after_failed_uv_command(
     run: Mock,
     resolve_python: Mock,
@@ -426,7 +426,7 @@ def test_run_wagtail_start_stops_after_failed_uv_command(
     "wagtail_generate.wagtail.latest_stable_python_version",
     return_value="3.14",
 )
-@patch("wagtail_generate.wagtail.subprocess.run")
+@patch("wagtail_generate.commands.subprocess.run")
 def test_run_wagtail_start_defaults_to_sqlite_without_driver(
     run: Mock,
     resolve_python: Mock,
@@ -456,7 +456,7 @@ def test_run_wagtail_start_defaults_to_sqlite_without_driver(
     "wagtail_generate.wagtail.latest_stable_python_version",
     return_value="3.14",
 )
-@patch("wagtail_generate.wagtail.subprocess.run")
+@patch("wagtail_generate.commands.subprocess.run")
 def test_late_command_failure_does_not_publish_partial_project(
     run: Mock,
     resolve_python: Mock,
@@ -485,7 +485,7 @@ def test_late_command_failure_does_not_publish_partial_project(
     resolve_python.assert_called_once_with(tmp_path)
 
 
-@patch("wagtail_generate.wagtail.subprocess.run")
+@patch("wagtail_generate.commands.subprocess.run")
 def test_latest_stable_python_version_uses_uv_download_catalog(run: Mock) -> None:
     run.return_value = subprocess.CompletedProcess(
         [],
@@ -519,7 +519,7 @@ def test_latest_stable_python_version_uses_uv_download_catalog(run: Mock) -> Non
     )
 
 
-@patch("wagtail_generate.wagtail.subprocess.run")
+@patch("wagtail_generate.commands.subprocess.run")
 def test_subfolder_generation_refuses_root_file_conflict(
     run: Mock,
     tmp_path: Path,
@@ -603,3 +603,35 @@ def test_flatten_preserves_unrelated_django_identifiers(
     assert "models.Model" in content
     assert "models.CharField" in content
     assert "src.Model" not in content
+
+
+@pytest.mark.parametrize("stage", ["discovery", "dependencies", "setup"])
+@patch("wagtail_generate.commands.subprocess.run")
+def test_missing_executable_returns_cli_error_without_publishing(
+    run: Mock,
+    stage: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    if stage != "discovery":
+        monkeypatch.setattr(
+            "wagtail_generate.wagtail.latest_stable_python_version", lambda _: "3.14"
+        )
+    run.side_effect = FileNotFoundError("uvx unavailable")
+    destination = tmp_path / "generated"
+    kwargs = (
+        {"dependency_resolver": resolve_dependencies} if stage == "dependencies" else {}
+    )
+    assert run_wagtail_start("example", project_root=destination, **kwargs) == 2
+    message = capsys.readouterr().err
+    expected = {
+        "discovery": "Discover Python version",
+        "dependencies": "Resolve project dependencies",
+        "setup": "Initialize project",
+    }
+    assert expected[stage] in message
+    assert "uvx unavailable" in message
+    assert not destination.exists()
+    assert not list(tmp_path.glob(".generated-*"))
+    run.assert_called_once()
