@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from wagtail_generate.planning import Database
 from wagtail_generate.wagtail import (
     _flatten_project_package,
     latest_stable_python_version,
@@ -148,12 +149,14 @@ def test_dependency_conflict_is_rejected_before_external_commands(
     run.assert_not_called()
 
 
-def write_mock_wagtail_project(project_root: Path) -> None:
+def write_mock_wagtail_project(
+    project_root: Path, source_directory: Path = Path("src")
+) -> None:
     """Create the relevant subset of Wagtail's default generated tree."""
     (project_root / "pyproject.toml").write_text(
         '[project]\nname = "example"\nversion = "0.1.0"\n'
     )
-    site_directory = project_root / "src"
+    site_directory = project_root / source_directory
     moved_root_files = (".dockerignore", "Dockerfile", "manage.py")
     for filename in (*moved_root_files, "requirements.txt"):
         content = (
@@ -635,3 +638,171 @@ def test_missing_executable_returns_cli_error_without_publishing(
     assert not destination.exists()
     assert not list(tmp_path.glob(".generated-*"))
     run.assert_called_once()
+
+
+@patch("wagtail_generate.wagtail.latest_stable_python_version", return_value="3.14")
+@patch(
+    "wagtail_generate.planning.plan_template",
+    side_effect=ValueError("invalid template"),
+)
+@patch("wagtail_generate.commands.subprocess.run")
+def test_documentation_planning_failure_prevents_execution(
+    run: Mock,
+    render: Mock,
+    resolve_python: Mock,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    destination = tmp_path / "generated"
+    assert run_wagtail_start("example", project_root=destination) == 2
+    assert "invalid template" in capsys.readouterr().err
+    run.assert_not_called()
+    assert not destination.exists()
+    assert not list(tmp_path.glob(".generated-*"))
+
+
+@pytest.mark.parametrize("subfolder", [None, Path("src"), Path("sites/cms")])
+@pytest.mark.parametrize("database", ["sqlite3", "postgresql", "mysql"])
+@patch("wagtail_generate.wagtail.latest_stable_python_version", return_value="3.14")
+@patch("wagtail_generate.commands.subprocess.run")
+def test_workflow_configures_before_formatting_and_publishes_complete_site(
+    run: Mock,
+    resolve_python: Mock,
+    subfolder: Path | None,
+    database: Database,
+    tmp_path: Path,
+) -> None:
+    destination = tmp_path / "generated"
+    source_directory = subfolder or Path(".")
+    settings_path = (subfolder or Path("example")) / "settings" / "base.py"
+    formatting_calls = []
+
+    def simulate_command(
+        command: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess:
+        staging = cast(Path, kwargs["cwd"])
+        assert not destination.exists()
+        if "wagtail" in command and "start" in command:
+            assert (staging / source_directory).is_dir()
+            assert command[-1] == "--template=custom-template"
+            write_mock_wagtail_project(staging, source_directory)
+            (staging / "AGENTS.md").write_text("Custom project guidance\n")
+        if "run" in command and ("djangofmt" in command or "ruff" in command):
+            settings = (staging / settings_path).read_text()
+            assert 'WAGTAIL_SITE_NAME = "Example Website"' in settings
+            assert f'"ENGINE": "django.db.backends.{database}"' in settings
+            assert (staging / "manage.py").is_file()
+            assert not (staging / source_directory / "requirements.txt").exists()
+            assert (staging / "README.md").read_text().startswith("# Example Website")
+            assert (staging / "AGENTS.md").read_text() == "Custom project guidance\n"
+            assert "[tool.ruff]" in (staging / "pyproject.toml").read_text()
+            formatting_calls.append(command)
+        return subprocess.CompletedProcess(command, returncode=0)
+
+    run.side_effect = simulate_command
+    assert (
+        run_wagtail_start(
+            "example",
+            site_name="Example Website",
+            project_root=destination,
+            site_subfolder=subfolder,
+            database=database,
+            template=Path("custom-template"),
+        )
+        == 0
+    )
+    assert len(formatting_calls) == 3
+    assert (destination / settings_path).is_file()
+    assert (destination / "compose.yaml").is_file()
+    assert (destination / "AGENTS.md").read_text() == "Custom project guidance\n"
+    if subfolder is not None:
+        assert not (destination / subfolder / "example").exists()
+        assert not (destination / subfolder / "manage.py").exists()
+    assert not list(tmp_path.glob(".generated-*"))
+
+
+@pytest.mark.parametrize(
+    ("failure", "message", "exit_code"),
+    [
+        ("wagtail", "wagtail: Generate Wagtail site", 7),
+        ("missing-package", "did not generate the expected example/ package", 2),
+        ("conflict", "refusing to overwrite generated code", 2),
+        ("configuration", "could not locate Wagtail's generated DATABASES setting", 2),
+    ],
+)
+@patch("wagtail_generate.wagtail.latest_stable_python_version", return_value="3.14")
+@patch("wagtail_generate.commands.subprocess.run")
+def test_workflow_failure_stops_before_formatting_and_cleans_staging(
+    run: Mock,
+    resolve_python: Mock,
+    failure: str,
+    message: str,
+    exit_code: int,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    destination = tmp_path / "generated"
+    destination.mkdir()
+
+    def simulate_command(
+        command: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess:
+        if "wagtail" in command and "start" in command:
+            if failure == "wagtail":
+                return subprocess.CompletedProcess(command, returncode=7)
+            if failure != "missing-package":
+                staging = cast(Path, kwargs["cwd"])
+                write_mock_wagtail_project(staging)
+                if failure == "conflict":
+                    (staging / "src" / "settings").mkdir()
+                elif failure == "configuration":
+                    settings = staging / "src" / "example" / "settings" / "base.py"
+                    settings.write_text(
+                        settings.read_text().replace("DATABASES =", "OLD =")
+                    )
+        return subprocess.CompletedProcess(command, returncode=0)
+
+    run.side_effect = simulate_command
+    assert (
+        run_wagtail_start(
+            "example", project_root=destination, site_subfolder=Path("src")
+        )
+        == exit_code
+    )
+    assert message in capsys.readouterr().err
+    assert run.call_count == 6  # Environment setup and Wagtail only.
+    assert list(destination.iterdir()) == []
+    assert not list(tmp_path.glob(".generated-*"))
+
+
+@patch("wagtail_generate.wagtail.latest_stable_python_version", return_value="3.14")
+@patch("wagtail_generate.commands.subprocess.run")
+def test_workflow_preserves_destination_populated_during_generation(
+    run: Mock,
+    resolve_python: Mock,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    destination = tmp_path / "generated"
+
+    def simulate_command(
+        command: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess:
+        if "wagtail" in command and "start" in command:
+            write_mock_wagtail_project(cast(Path, kwargs["cwd"]))
+        if "format" in command:
+            destination.mkdir()
+            (destination / "keep.txt").write_text("Created by another process\n")
+        return subprocess.CompletedProcess(command, returncode=0)
+
+    run.side_effect = simulate_command
+    assert (
+        run_wagtail_start(
+            "example", project_root=destination, site_subfolder=Path("src")
+        )
+        == 2
+    )
+    assert "project root became nonempty" in capsys.readouterr().err
+    assert [path.name for path in destination.iterdir()] == ["keep.txt"]
+    assert (destination / "keep.txt").read_text() == "Created by another process\n"
+    assert not list(tmp_path.glob(".generated-*"))

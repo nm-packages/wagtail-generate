@@ -143,8 +143,28 @@ shell. Output streams to the terminal by default. Use `capture_output=True` only
 when parsing a command's response, such as UV's Python catalog or dependency list.
 Captured stderr is included in failure messages.
 
-`wagtail.py` builds named commands in the generation plan and executes them in the
-staging directory. A failed command raises immediately, so later steps and
+`planning.py` owns project options, typed plans, command construction, and rendered
+documentation. `build_generation_plan()` assembles these with the developer-tooling
+plan without running commands or writing the destination. Its helpers group setup,
+Wagtail start, formatting, and documentation planning by purpose.
+
+`wagtail.py` validates the generation boundary, resolves Python and dependencies,
+and passes the completed plan to `execute_generation_plan()`. That function owns
+staging, cleanup, publication, and execution error reporting. Inside staging,
+`_execute_generation_plan_in_directory()` reads in execution order:
+
+1. `_prepare_environment()` creates a relocatable environment and installs dependencies.
+2. `_generate_wagtail_site()` creates the selected source directory and runs Wagtail.
+3. `_adapt_project_structure()` arranges the generated files and locates settings.
+4. `_configure_project()` applies the site name, database, tooling, and documentation.
+5. `_format_project()` runs the planned template and Python formatters.
+
+Structure adaptation stops generation when the expected package is missing or
+flattening would overwrite a generated file. Only a fully successful sequence is
+published; the destination is checked again before publication. Temporary staging
+is cleaned up on failure. Source-rewriting details remain in `wagtail.py`.
+
+A failed command raises immediately, so later steps and
 publication do not run. The execution boundary reports the error and preserves
 the child exit code; launch errors and planning failures return 2. Wagtail stays
 in the generated project's environment rather than becoming a generator runtime

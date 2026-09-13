@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from wagtail_generate.wagtail import Database, ProjectOptions, build_generation_plan
+from wagtail_generate.planning import Database, ProjectOptions, build_generation_plan
 
 
 @pytest.mark.parametrize(
