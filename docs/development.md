@@ -133,3 +133,20 @@ Python.
 
 Prefer the standard library over new runtime dependencies. Treat UV as an external
 prerequisite and install Wagtail into each generated project's environment.
+
+## External commands
+
+`commands.py` owns subprocess execution and translates launch failures and nonzero
+exit codes into `GenerationError`. Call `run_command()` with a stage and a
+human-readable description. Pass arguments as a sequence; commands never use a
+shell. Output streams to the terminal by default. Use `capture_output=True` only
+when parsing a command's response, such as UV's Python catalog or dependency list.
+Captured stderr is included in failure messages.
+
+`wagtail.py` builds named commands in the generation plan and executes them in the
+staging directory. A failed command raises immediately, so later steps and
+publication do not run. The execution boundary reports the error and preserves
+the child exit code; launch errors and planning failures return 2. Wagtail stays
+in the generated project's environment rather than becoming a generator runtime
+dependency. The playground and generated standalone scripts retain their own
+execution paths for now.
