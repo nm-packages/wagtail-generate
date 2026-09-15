@@ -47,6 +47,10 @@ creates opinionated Wagtail CMS projects with root or source-subfolder structure
 
 ## Quality checks
 
+Documentation prose does not use an 80-character hard-wrap convention. Prefer
+readable paragraphs and natural line lengths; wrap code and tables where needed
+for clarity.
+
 Run these before considering a change complete:
 
 ```shell
