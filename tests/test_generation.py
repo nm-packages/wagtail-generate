@@ -49,7 +49,8 @@ def test_resolve_dependencies_returns_pinned_direct_requirements(run: Mock) -> N
             "pre-commit==4.6.2\n"
             "ruff==0.12.0\n"
             "wagtail==7.2.1\n"
-            "psycopg[binary]==3.2.9\n"
+            "psycopg==3.2.9\n"
+            "psycopg-binary==3.2.9\n"
         ),
         stderr="",
     )
@@ -58,6 +59,19 @@ def test_resolve_dependencies_returns_pinned_direct_requirements(run: Mock) -> N
         runtime=("wagtail==7.2.1", "psycopg[binary]==3.2.9"),
         development=("ruff==0.12.0", "djangofmt==1.0.0", "pre-commit==4.6.2"),
     )
+
+
+@patch("wagtail_generate.commands.subprocess.run")
+def test_resolve_dependencies_requires_base_distribution_for_extras(run: Mock) -> None:
+    run.return_value = subprocess.CompletedProcess(
+        [],
+        returncode=0,
+        stdout="wagtail==7.2.1\npsycopg-binary==3.2.9\n",
+        stderr="",
+    )
+
+    with pytest.raises(ValueError, match=r"psycopg\[binary\]"):
+        resolve_dependencies("postgresql", "3.14")
 
 
 @patch("wagtail_generate.commands.subprocess.run")

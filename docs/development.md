@@ -51,7 +51,9 @@ WAGTAIL_GENERATE_TEST_DISTRIBUTION=1 uv run pytest tests/test_distribution.py
 The real-Wagtail compatibility smoke test exercises both supported source
 layouts against the installed Wagtail generator, then runs Django checks and
 migrations in each generated project. It is opt-in locally because it resolves
-and installs Wagtail and its development dependencies for eight generated sites:
+and installs Wagtail and its development dependencies for multiple generated sites.
+It also generates a PostgreSQL site and verifies the binary driver requirement,
+lockfile entries, driver import, and Django system checks without a running database:
 
 ```shell
 WAGTAIL_GENERATE_TEST_COMPATIBILITY=1 uv run pytest tests/test_wagtail_compatibility.py
