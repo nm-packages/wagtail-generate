@@ -11,7 +11,7 @@ from wagtail_generate.developer_tools import (
     database_driver,
 )
 from wagtail_generate.homepage import build_homepage_files, plan_homepage_removals
-from wagtail_generate.model_options import build_model_files, inspect_template_models
+from wagtail_generate.model_options import build_model_files
 from wagtail_generate.rendering import RenderedFile, plan_template, render_template
 from wagtail_generate.safety import validate_source_package
 
@@ -29,7 +29,6 @@ class ProjectOptions:
     database: Database
     project_root: Path
     site_subfolder: Path | None
-    template: Path | None
     custom_user: bool = False
     custom_images: bool = False
     starter_homepage: bool = False
@@ -114,7 +113,6 @@ def build_generation_plan(
         options.project_name,
         options.custom_user,
         options.custom_images,
-        options.template,
     )
     model_apps = tuple(
         name
@@ -129,7 +127,6 @@ def build_generation_plan(
         homepage_files=build_homepage_files(
             options.source_directory,
             options.starter_homepage,
-            options.template,
         ),
         homepage_removals=plan_homepage_removals(
             options.source_directory,
@@ -231,9 +228,6 @@ def _plan_wagtail_command(options: ProjectOptions) -> CommandPlan:
         options.project_name,
         options.source_directory,
     ]
-    if options.template is not None:
-        wagtail_arguments.append(f"--template={options.template}")
-
     return CommandPlan(tuple(wagtail_arguments), "Generate Wagtail site")
 
 
@@ -241,18 +235,13 @@ def _plan_documentation_files(
     options: ProjectOptions, python_version: str
 ) -> tuple[RenderedFile, ...]:
     """Render project documentation, retaining custom agent guidance on write."""
-    template_description = (
-        f"custom template `{options.template}`"
-        if options.template is not None
-        else "the default Wagtail template"
-    )
-    current_models = inspect_template_models(options.template)
+    template_description = "the default Wagtail template"
     documentation_context = {
         "starter_homepage": options.starter_homepage,
-        "user_model": "accounts.User" if options.custom_user else current_models[0],
+        "user_model": "accounts.User" if options.custom_user else "auth.User",
         "image_model": "images.CustomImage"
         if options.custom_images
-        else current_models[1],
+        else "wagtailimages.Image",
         "site_name": options.site_name,
         "project_name": options.project_name,
         "source_directory": options.source_directory,

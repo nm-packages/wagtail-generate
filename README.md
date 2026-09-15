@@ -36,7 +36,6 @@ location.
   src` puts it in a source subfolder.
 - `--database postgresql` or `--database mysql` selects a server database.
   SQLite is the default.
-- `--template PATH` uses a local Wagtail project template.
 - `--custom-user` and `--custom-images` enable the optional user and image
   model apps. Their `--no-...` forms disable the corresponding interactive
   prompts.

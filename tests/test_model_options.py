@@ -9,7 +9,6 @@ from wagtail_generate.cli import main, prompt_for_custom_model
 from wagtail_generate.model_options import (
     build_model_files,
     configure_models,
-    inspect_template_models,
 )
 from wagtail_generate.planning import ProjectOptions, build_generation_plan
 
@@ -120,7 +119,6 @@ def test_plan_and_configure_models(tmp_path, source, user, images):
         "sqlite3",
         tmp_path,
         None if source == "." else Path(source),
-        None,
         user,
         images,
     )
@@ -158,55 +156,10 @@ def test_plan_and_configure_models(tmp_path, source, user, images):
     assert ("images.CustomImage" if images else "wagtailimages.Image") in readme
 
 
-@pytest.mark.parametrize(
-    "contents,expected",
-    [
-        ('AUTH_USER_MODEL = "people.Person"\n', "people.Person"),
-        ("AUTH_USER_MODEL = choose_model()\n", "Cannot determine"),
-        ('if True:\n    AUTH_USER_MODEL = "people.Person"\n', "Cannot determine"),
-        ('# AUTH_USER_MODEL = "unused.User"\n', "Cannot determine"),
-        (
-            'AUTH_USER_MODEL = "one.User"\nAUTH_USER_MODEL = "two.User"\n',
-            "Cannot determine",
-        ),
-        ("from .base import *\n", "Cannot determine"),
-    ],
-)
-def test_template_setting_inspection(tmp_path, contents, expected):
-    (tmp_path / "base.py").write_text(contents)
-    assert expected in inspect_template_models(tmp_path)[0]
-    assert inspect_template_models(None) == ("auth.User", "wagtailimages.Image")
-    assert "Cannot determine" in inspect_template_models(tmp_path / "archive.zip")[0]
-
-
-@pytest.mark.parametrize(
-    "path,contents,error",
-    [
-        ("base.py", 'AUTH_USER_MODEL = "people.User"\n', "AUTH_USER_MODEL"),
-        ("other/apps.py", 'label = "accounts"\n', "app configuration"),
-        ("accounts/models.py", "", "template path"),
-    ],
-)
-def test_template_conflicts_are_rejected_before_generation(
-    tmp_path, path, contents, error
-):
-    target = tmp_path / path
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(contents)
-    with pytest.raises(ValueError, match=error):
-        build_model_files(".", "example", True, False, tmp_path)
-    assert build_model_files(".", "example", False, False, tmp_path) == ()
-
-
 @pytest.mark.parametrize("source,project", [("accounts", "example"), ("src", "images")])
 def test_app_name_collisions(source, project):
     with pytest.raises(ValueError, match="package conflicts"):
-        build_model_files(source, project, True, True, None)
-
-
-def test_archive_template_rejected_only_with_models(tmp_path):
-    with pytest.raises(ValueError, match="template directory"):
-        build_model_files(".", "example", False, True, tmp_path / "template.zip")
+        build_model_files(source, project, True, True)
 
 
 @pytest.mark.parametrize(
@@ -220,7 +173,7 @@ def test_archive_template_rejected_only_with_models(tmp_path):
 def test_staged_settings_conflicts_leave_files_untouched(tmp_path, content, error):
     settings = tmp_path / "base.py"
     settings.write_text(content)
-    files = build_model_files(".", "example", True, False, None)
+    files = build_model_files(".", "example", True, False)
     with pytest.raises(ValueError, match=error):
         configure_models(
             tmp_path,
@@ -240,7 +193,7 @@ def test_existing_app_path_is_not_overwritten(tmp_path, path):
     (tmp_path / path).write_text("preserve")
     settings = tmp_path / "base.py"
     settings.write_text("INSTALLED_APPS = []\n")
-    files = build_model_files(".", "example", True, False, None)
+    files = build_model_files(".", "example", True, False)
     with pytest.raises(ValueError, match="refusing to overwrite"):
         configure_models(
             tmp_path,
@@ -257,7 +210,7 @@ def test_existing_app_path_is_not_overwritten(tmp_path, path):
 def test_tuple_installed_apps_and_unicode(tmp_path):
     settings = tmp_path / "base.py"
     settings.write_text('LABEL = "é"; INSTALLED_APPS = ()\n')
-    files = build_model_files(".", "example", True, False, None)
+    files = build_model_files(".", "example", True, False)
     configure_models(
         tmp_path,
         settings,
@@ -272,11 +225,11 @@ def test_tuple_installed_apps_and_unicode(tmp_path):
     assert namespace["INSTALLED_APPS"] == ("accounts",)
 
 
-def test_swappable_references_are_not_template_conflicts(tmp_path):
+def test_swappable_references_are_not_conflicts(tmp_path):
     (tmp_path / "models.py").write_text(
         "from django.conf import settings\n"
         "# AUTH_USER_MODEL is intentionally swappable\n"
         "owner = models.ForeignKey(\n"
         "    settings.AUTH_USER_MODEL, on_delete=models.CASCADE)\n"
     )
-    assert build_model_files(".", "example", True, False, tmp_path)
+    assert build_model_files(".", "example", True, False)

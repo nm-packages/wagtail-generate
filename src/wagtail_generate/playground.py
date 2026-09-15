@@ -30,7 +30,6 @@ class PlaygroundOptions:
     project_name: str = "playground"
     site_name: str = "Developer Playground"
     database: Database = "sqlite3"
-    template: Path | None = None
     starter_homepage: bool = False
     custom_user: bool = False
     custom_images: bool = False
@@ -61,7 +60,7 @@ def reset_playground(destination: Path) -> None:
 
 
 def parse_arguments(argv: Sequence[str] | None = None) -> PlaygroundOptions:
-    """Validate playground choices and template paths before any reset."""
+    """Validate playground choices before any reset."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--reset", action="store_true", help="Remove the playground only"
@@ -94,14 +93,6 @@ def parse_arguments(argv: Sequence[str] | None = None) -> PlaygroundOptions:
             if arguments.site_directory == Path(".")
             else normalize_subfolder(str(arguments.site_directory))
         )
-        template = arguments.template
-        if template is not None:
-            template = template.resolve()
-            if not template.exists():
-                raise ValueError(f"Wagtail project template does not exist: {template}")
-            destination = playground_directory()
-            if template.is_relative_to(destination):
-                raise ValueError("template must be outside the playground being reset")
     except ValueError as error:
         parser.error(str(error))
     return PlaygroundOptions(
@@ -110,7 +101,6 @@ def parse_arguments(argv: Sequence[str] | None = None) -> PlaygroundOptions:
         project_name=project_name,
         site_name=site_name,
         database=arguments.database,
-        template=template,
         starter_homepage=arguments.starter_homepage,
         custom_user=arguments.custom_user,
         custom_images=arguments.custom_images,
@@ -147,7 +137,6 @@ def generate_playground(destination: Path, options: PlaygroundOptions) -> int:
         project_root=destination,
         database=options.database,
         site_subfolder=options.site_subfolder,
-        template=options.template,
         starter_homepage=options.starter_homepage,
         custom_user=options.custom_user,
         custom_images=options.custom_images,

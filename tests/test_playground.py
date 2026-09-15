@@ -254,10 +254,8 @@ def test_invalid_site_directory_does_not_reset(
 
 @pytest.mark.parametrize("database", ["sqlite3", "postgresql", "mysql"])
 def test_generation_options_reach_generator(
-    destination: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, database: str
+    destination: Path, monkeypatch: pytest.MonkeyPatch, database: str
 ) -> None:
-    template = tmp_path / "custom template"
-    template.mkdir()
     generate = Mock(return_value=0)
 
     def generate_site(**kwargs: object) -> int:
@@ -278,8 +276,6 @@ def test_generation_options_reach_generator(
                 database,
                 "--site-directory",
                 "Site Code/backend",
-                "--template",
-                str(template),
                 "--custom-user",
                 "--custom-images",
                 "--starter-homepage",
@@ -294,7 +290,6 @@ def test_generation_options_reach_generator(
         database=database,
         project_root=destination,
         site_subfolder=Path("site_code/backend"),
-        template=template,
         custom_user=True,
         custom_images=True,
         starter_homepage=True,
@@ -326,7 +321,6 @@ def test_boolean_options_can_be_explicitly_disabled() -> None:
         ["--database", "oracle"],
         ["--site-name", " "],
         ["--project-name", "!"],
-        ["--template", "/nonexistent/wagtail-template"],
         ["--directory", "/tmp/other"],
     ],
 )
@@ -340,21 +334,3 @@ def test_invalid_options_preserve_existing_playground(
         playground.main(arguments)
     assert error.value.code == 2
     assert marker.is_file()
-
-
-def test_template_inside_playground_is_rejected(destination: Path) -> None:
-    destination.mkdir()
-    marker = destination / playground.MARKER
-    marker.touch()
-    with pytest.raises(SystemExit) as error:
-        playground.main(["--template", str(destination)])
-    assert error.value.code == 2
-    assert marker.exists()
-
-
-def test_template_file_is_accepted_like_cli(destination: Path, tmp_path: Path) -> None:
-    template = tmp_path / "template.zip"
-    template.touch()
-    assert (
-        playground.parse_arguments(["--template", str(template)]).template == template
-    )

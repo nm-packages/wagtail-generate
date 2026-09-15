@@ -98,7 +98,6 @@ def test_start_forwards_options_and_exit_code(
         database=database,
         project_root=output,
         site_subfolder=None,
-        template=None,
         custom_user=False,
         custom_images=False,
         starter_homepage=False,
@@ -153,7 +152,6 @@ def test_start_validates_site_name_directory_by_default(
             database="postgresql",
             project_root=destination,
             site_subfolder=None,
-            template=None,
             custom_user=False,
             custom_images=False,
             starter_homepage=False,
@@ -187,7 +185,6 @@ def test_non_ascii_site_name_uses_project_name_as_directory_fallback(
         database="sqlite3",
         project_root=destination,
         site_subfolder=None,
-        template=None,
         custom_user=False,
         custom_images=False,
         starter_homepage=False,
@@ -359,73 +356,6 @@ def test_nested_package_can_use_conflicting_name(value: str) -> None:
     assert normalize_subfolder(value) == Path(value)
 
 
-@patch("wagtail_generate.cli.run_wagtail_start", return_value=0)
-@patch("wagtail_generate.cli.source_checkout_root", return_value=None)
-def test_start_resolves_relative_template_from_invocation_directory(
-    find_checkout: Mock,
-    run_start: Mock,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    template = tmp_path / "templates" / "custom"
-    template.mkdir(parents=True)
-    destination = tmp_path / "generated" / "example"
-    monkeypatch.chdir(tmp_path)
-
-    result = main(
-        [
-            "start",
-            "example",
-            "--site-name",
-            "Example",
-            "--directory",
-            str(destination),
-            "--site-directory",
-            ".",
-            "--template",
-            "templates/custom",
-        ]
-    )
-
-    assert result == 0
-    assert run_start.call_args.kwargs["template"] == template
-    find_checkout.assert_called_once_with()
-
-
-@patch("wagtail_generate.cli.run_wagtail_start")
-@patch("wagtail_generate.cli.source_checkout_root", return_value=None)
-def test_start_refuses_missing_template_before_creating_project(
-    find_checkout: Mock,
-    run_start: Mock,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    destination = tmp_path / "generated" / "example"
-    monkeypatch.chdir(tmp_path)
-
-    result = main(
-        [
-            "start",
-            "example",
-            "--site-name",
-            "Example",
-            "--directory",
-            str(destination),
-            "--site-directory",
-            ".",
-            "--template",
-            "missing-template",
-        ]
-    )
-
-    assert result == 2
-    assert "Wagtail project template does not exist" in capsys.readouterr().err
-    assert not destination.exists()
-    run_start.assert_not_called()
-    find_checkout.assert_called_once_with()
-
-
 @pytest.mark.parametrize(
     ("responses", "expected", "message"),
     [
@@ -507,7 +437,6 @@ def test_start_uses_normalized_project_name(
         database="mysql",
         project_root=tmp_path,
         site_subfolder=None,
-        template=None,
         custom_user=False,
         custom_images=False,
         starter_homepage=False,

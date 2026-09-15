@@ -66,13 +66,10 @@ def validate_homepage(source: Path) -> None:
 def build_homepage_files(
     source_directory: str,
     enabled: bool,
-    template: Path | None,
 ) -> tuple[RenderedFile, ...]:
     """Render the homepage only when replacement was explicitly requested."""
     if not enabled:
         return ()
-    if template is not None:
-        validate_homepage(template)
     source = Path(source_directory)
     return (
         plan_template(source / HOME_TEMPLATE, "homepage/home_page.html"),

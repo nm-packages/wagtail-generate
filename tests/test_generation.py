@@ -522,7 +522,6 @@ def test_workflow_configures_before_formatting_and_publishes_complete_site(
         assert not destination.exists()
         if "wagtail" in command and "start" in command:
             assert (staging / source_directory).is_dir()
-            assert command[-1] == "--template=custom-template"
             write_mock_wagtail_project(staging, source_directory)
             (staging / "AGENTS.md").write_text("Custom project guidance\n")
         if "run" in command and ("djangofmt" in command or "ruff" in command):
@@ -545,7 +544,6 @@ def test_workflow_configures_before_formatting_and_publishes_complete_site(
             project_root=destination,
             site_subfolder=subfolder,
             database=database,
-            template=Path("custom-template"),
         )
         == 0
     )
