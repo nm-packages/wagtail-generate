@@ -39,7 +39,7 @@ configuration, and project guidance consistent with the selected database and
 source layout.
 
 The generator has one tooling and template set. `--site-directory` selects where
-Wagtail source lives; `--template` supplies a custom Wagtail start template.
+Wagtail source lives.
 Wagtail is installed into each generated project's environment rather than into
 the generator's runtime environment. Prefer the standard library over adding a
 runtime dependency.

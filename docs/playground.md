@@ -34,4 +34,4 @@ uv run python -m wagtail_generate.playground --help
 ```
 
 The Make workflow deliberately supplies its own fixed configuration. Invalid
-options and template paths are checked before an existing playground is reset.
+options are checked before an existing playground is reset.

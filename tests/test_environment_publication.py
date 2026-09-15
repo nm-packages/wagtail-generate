@@ -29,7 +29,7 @@ def test_console_script_runs_after_publication(
     if existing_destination:
         destination.mkdir()
     plan = build_generation_plan(
-        ProjectOptions("example", "Example", "sqlite3", destination, None, None),
+        ProjectOptions("example", "Example", "sqlite3", destination, None),
         f"{sys.version_info.major}.{sys.version_info.minor}",
     )
     environment_command = list(

@@ -1,4 +1,4 @@
-"""Starter homepage selection, rendering, and custom-template boundaries."""
+"""Starter homepage selection, rendering, and validation."""
 
 from pathlib import Path
 from unittest.mock import patch
@@ -50,8 +50,6 @@ def test_cli_choice(tmp_path, enabled):
 @pytest.mark.parametrize("source", [".", "src", "website/source"])
 @pytest.mark.parametrize("enabled", [False, True])
 def test_plan_and_custom_homepage_replacement(tmp_path, source, enabled):
-    template = tmp_path / "template"
-    make_home(template)
     destination = tmp_path / "output"
     make_home(destination / source)
     for relative_path in (*WELCOME_FILES, Path("home/static/css/custom.css")):
@@ -64,7 +62,6 @@ def test_plan_and_custom_homepage_replacement(tmp_path, source, enabled):
         "sqlite3",
         destination,
         None if source == "." else Path(source),
-        template,
         starter_homepage=enabled,
     )
     plan = build_generation_plan(options, "3.14")
@@ -80,7 +77,6 @@ def test_plan_and_custom_homepage_replacement(tmp_path, source, enabled):
         destination / source / "home/static/css/custom.css"
     ).read_text() == "original"
     html = (destination / source / HOME_TEMPLATE).read_text()
-    assert (template / HOME_TEMPLATE).read_text() == "Custom homepage"
     if enabled:
         assert "<main" in html
         assert "welcome_page" not in html
@@ -109,22 +105,13 @@ def test_plan_and_custom_homepage_replacement(tmp_path, source, enabled):
         "not valid python!",
     ],
 )
-def test_unsupported_custom_models_fail_without_writes(tmp_path, model):
+def test_unsupported_homepage_models_fail_without_writes(tmp_path, model):
     make_home(tmp_path, model)
-    assert build_homepage_files(".", False, tmp_path) == ()
-    with pytest.raises(ValueError, match="--starter-homepage requires"):
-        build_homepage_files(".", True, tmp_path)
-    files = build_homepage_files(".", True, None)
+    assert build_homepage_files(".", False) == ()
+    files = build_homepage_files(".", True)
     with pytest.raises(ValueError, match="--starter-homepage requires"):
         configure_homepage(tmp_path, ".", files)
     assert (tmp_path / HOME_TEMPLATE).read_text() == "Custom homepage"
-
-
-def test_missing_or_archive_template(tmp_path):
-    for template in (tmp_path, tmp_path / "template.zip"):
-        assert build_homepage_files(".", False, template) == ()
-        with pytest.raises(ValueError, match="--starter-homepage requires"):
-            build_homepage_files(".", True, template)
 
 
 @pytest.mark.parametrize(
@@ -142,7 +129,6 @@ def test_missing_or_archive_template(tmp_path):
         (False, ["--no-starter-homepage"], [], False, 0),
     ],
 )
-@pytest.mark.parametrize("custom_template", [False, True])
 def test_runtime_homepage_choice(
     tmp_path,
     interactive,
@@ -150,13 +136,7 @@ def test_runtime_homepage_choice(
     answers,
     expected,
     prompt_count,
-    custom_template,
 ):
-    template_flags = []
-    if custom_template:
-        template = tmp_path / "template"
-        make_home(template)
-        template_flags = ["--template", str(template)]
     with (
         patch("wagtail_generate.cli.sys.stdin.isatty", return_value=interactive),
         patch("builtins.input", side_effect=answers) as read_input,
@@ -175,7 +155,6 @@ def test_runtime_homepage_choice(
                     str(tmp_path / "output"),
                     "--no-custom-user",
                     "--no-custom-images",
-                    *template_flags,
                     *flags,
                 ]
             )
@@ -210,7 +189,7 @@ def test_cleanup_rejects_unsafe_paths_before_changes(tmp_path, kind):
         configure_homepage(
             source,
             ".",
-            build_homepage_files(".", True, None),
+            build_homepage_files(".", True),
             plan_homepage_removals(".", True),
         )
     assert (external / "welcome_page.css").read_text() == "preserve"
@@ -222,7 +201,7 @@ def test_cleanup_tolerates_missing_welcome_files(tmp_path):
     configure_homepage(
         tmp_path,
         ".",
-        build_homepage_files(".", True, None),
+        build_homepage_files(".", True),
         plan_homepage_removals(".", True),
     )
     assert "<main" in (tmp_path / HOME_TEMPLATE).read_text()

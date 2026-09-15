@@ -10,7 +10,6 @@ from pathlib import Path
 
 from wagtail_generate import __version__
 from wagtail_generate.generation import Database, run_wagtail_start
-from wagtail_generate.model_options import inspect_template_models
 from wagtail_generate.safety import (
     destination_is_in_source_checkout,
     source_checkout_root,
@@ -156,11 +155,6 @@ def add_generation_arguments(
             "Non-interactive Wagtail code directory relative to the project root; "
             "use '.' for the root."
         ),
-    )
-    parser.add_argument(
-        "--template",
-        type=Path,
-        help="Optional custom Wagtail project template path.",
     )
     parser.add_argument(
         "--starter-homepage",
@@ -313,24 +307,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
                 return 2
 
-        template = arguments.template
-        if template is not None:
-            template = template.resolve()
-            if not template.exists():
-                print(
-                    f"error: Wagtail project template does not exist: {template}",
-                    file=sys.stderr,
-                )
-                return 2
-
-        current_user, current_image = inspect_template_models(template)
         model_options: dict[str, bool] = {}
         for name, label, current, question in (
-            ("custom_user", "user", current_user, "Create a custom user model?"),
+            ("custom_user", "user", "auth.User", "Create a custom user model?"),
             (
                 "custom_images",
                 "image",
-                current_image,
+                "wagtailimages.Image",
                 "Create custom image and rendition models?",
             ),
         ):
@@ -359,7 +342,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             database=database,
             project_root=project_root,
             site_subfolder=site_subfolder,
-            template=template,
             starter_homepage=starter_homepage,
             custom_user=model_options["custom_user"],
             custom_images=model_options["custom_images"],

@@ -36,7 +36,6 @@ def test_complete_plan_is_rendered_without_writing_destination(
         database=database,
         project_root=project_root,
         site_subfolder=subfolder,
-        template=None,
     )
 
     plan = build_generation_plan(options, "3.14")
@@ -102,7 +101,7 @@ def test_plan_rejects_dependency_source_package(
 def test_documentation_preserves_custom_agent_guidance(tmp_path: Path) -> None:
     from wagtail_generate.rendering import write_rendered_files
 
-    options = ProjectOptions("example", "Example", "sqlite3", tmp_path, None, None)
+    options = ProjectOptions("example", "Example", "sqlite3", tmp_path, None)
     plan = build_generation_plan(options, "3.14")
     custom_paths = (
         Path("AGENTS.md"),

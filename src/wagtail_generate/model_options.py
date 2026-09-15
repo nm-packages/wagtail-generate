@@ -7,7 +7,6 @@ from pathlib import Path
 from wagtail_generate.rendering import RenderedFile, plan_template, write_rendered_files
 
 MODEL_SETTINGS = ("AUTH_USER_MODEL", "WAGTAILIMAGES_IMAGE_MODEL")
-DEFAULT_MODELS = ("auth.User", "wagtailimages.Image")
 
 
 def _source_files(directory: Path) -> list[Path]:
@@ -17,37 +16,6 @@ def _source_files(directory: Path) -> list[Path]:
         for path in directory.rglob("*.py")
         if not any(part.startswith(".") for part in path.relative_to(directory).parts)
     )
-
-
-def inspect_template_models(template: Path | None) -> tuple[str, str]:
-    """Describe literal template settings without executing template Python.
-
-    Conditional, imported and computed values cannot be resolved reliably here.
-    """
-    if template is None:
-        return DEFAULT_MODELS
-    if not template.is_dir():
-        return ("Cannot determine from custom template",) * 2
-    descriptions = []
-    files = _source_files(template)
-    for setting, default in zip(MODEL_SETTINGS, DEFAULT_MODELS, strict=True):
-        matches = []
-        for path in files:
-            content = path.read_text()
-            for line in content.splitlines():
-                match = re.fullmatch(
-                    rf"{setting}\s*=\s*(['\"])([\w.]+)\1\s*(?:#.*)?", line
-                )
-                if match:
-                    matches.append(match[2])
-                elif setting in line and not line.lstrip().startswith("#"):
-                    matches.append("Cannot determine from custom template")
-        descriptions.append(
-            matches[0]
-            if len(matches) == 1
-            else f"Cannot determine from custom template (default: {default})"
-        )
-    return descriptions[0], descriptions[1]
 
 
 def _validate_conflicts(directory: Path, apps: tuple[str, ...]) -> None:
@@ -76,7 +44,6 @@ def build_model_files(
     project_name: str,
     custom_user: bool,
     custom_images: bool,
-    template: Path | None,
 ) -> tuple[RenderedFile, ...]:
     """Render optional applications and validate known conflicts before execution."""
     apps = tuple(
@@ -89,17 +56,6 @@ def build_model_files(
     source = Path(source_directory)
     if project_name in apps or (source != Path(".") and source.parts[0] in apps):
         raise ValueError("project or source package conflicts with a custom model app")
-    if template is not None:
-        if not template.is_dir():
-            raise ValueError(
-                "custom model options require an inspectable template directory"
-            )
-        _validate_conflicts(template, apps)
-        for app in apps:
-            if (template / app).exists():
-                raise ValueError(
-                    f"custom {app} conflicts with template path: {template / app}"
-                )
     planned = []
     for app in apps:
         module = app if source == Path(".") else f"{'.'.join(source.parts)}.{app}"
