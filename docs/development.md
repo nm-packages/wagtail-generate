@@ -51,7 +51,7 @@ WAGTAIL_GENERATE_TEST_DISTRIBUTION=1 uv run pytest tests/test_distribution.py
 The real-Wagtail compatibility smoke test exercises both supported source
 layouts against the installed Wagtail generator, then runs Django checks and
 migrations in each generated project. It is opt-in locally because it resolves
-and installs Wagtail and its development dependencies twice:
+and installs Wagtail and its development dependencies for eight generated sites:
 
 ```shell
 WAGTAIL_GENERATE_TEST_COMPATIBILITY=1 uv run pytest tests/test_wagtail_compatibility.py
@@ -194,8 +194,10 @@ staging, cleanup, publication, and execution error reporting. Inside staging,
 1. `_prepare_environment()` creates a relocatable environment and installs dependencies.
 2. `_generate_wagtail_site()` creates the selected source directory and runs Wagtail.
 3. `_adapt_project_structure()` arranges the generated files and locates settings.
-4. `_configure_project()` applies the site name, database, tooling, and documentation.
-5. `_format_project()` runs the planned template and Python formatters.
+4. `_configure_project()` applies optional model apps, the site name, database,
+   tooling, and documentation.
+5. Planned model commands create initial migrations when custom models are enabled.
+6. `_format_project()` runs the planned template and Python formatters.
 
 Structure adaptation stops generation when the expected package or template files
 are missing, or flattening would overwrite a generated file. The focused
@@ -221,3 +223,22 @@ steps. Each step receives its command and environment directly; command names ar
 not inspected to decide whether to add credentials or print server information.
 The marker is written only after generation succeeds, and reset refuses symlinks or
 unrecognized directories.
+
+## Optional model apps
+
+`model_options.py` inspects custom-template model settings without importing them,
+plans packaged `accounts`/`images` app templates, and rejects conflicting model
+settings, app paths and labels. `ProjectOptions` stores independent boolean model
+choices; both default to false. Interactive prompts belong in `cli.py`; direct
+Python callers never prompt.
+
+The generation plan includes model files and a Django `makemigrations --noinput
+--no-header` command for selected apps. After structure adaptation, configuration
+validates conflicts before writing apps or model settings. Migrations are created
+in staging against resolved dependencies before formatting and publication. They
+are not applied during ordinary generation. Framework-generated migration content
+is owned by Django; application templates remain under `templates/models/`.
+
+Real-Wagtail compatibility checks cover four model combinations in each layout,
+including migration drift and generated-site tests. Model settings and extension
+guidance are recorded in the generated README. Saved configuration is deferred.

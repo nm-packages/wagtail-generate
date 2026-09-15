@@ -10,6 +10,7 @@ from pathlib import Path
 
 from wagtail_generate import __version__
 from wagtail_generate.generation import Database, run_wagtail_start
+from wagtail_generate.model_options import inspect_template_models
 from wagtail_generate.safety import (
     destination_is_in_source_checkout,
     source_checkout_root,
@@ -100,6 +101,27 @@ def prompt_for_site_subfolder(
                 print("Please answer yes or no.")
 
 
+def prompt_for_custom_model(
+    label: str,
+    current: str,
+    question: str,
+    input_fn: Callable[[str], str] | None = None,
+) -> bool:
+    """Display the current model and ask an independent, default-no question."""
+    print(f"Current {label} model: {current}")
+    read_input = input_fn or input
+    while True:
+        try:
+            answer = read_input(f"{question} [y/N]: ").strip().lower()
+        except EOFError:
+            return False
+        if answer in ("", "n", "no"):
+            return False
+        if answer in ("y", "yes"):
+            return True
+        print("Please answer yes or no.")
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Create the command-line argument parser."""
     parser = argparse.ArgumentParser(
@@ -151,6 +173,13 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Optional custom Wagtail project template path.",
     )
+    for name in ("custom-user", "custom-images"):
+        start_parser.add_argument(
+            f"--{name}",
+            action=argparse.BooleanOptionalAction,
+            default=None,
+            help="Create custom models; prompts in a terminal, otherwise disabled",
+        )
     return parser
 
 
@@ -261,6 +290,26 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
                 return 2
 
+        current_user, current_image = inspect_template_models(template)
+        model_options: dict[str, bool] = {}
+        for name, label, current, question in (
+            ("custom_user", "user", current_user, "Create a custom user model?"),
+            (
+                "custom_images",
+                "image",
+                current_image,
+                "Create custom image and rendition models?",
+            ),
+        ):
+            choice = getattr(arguments, name)
+            if choice is None:
+                choice = (
+                    prompt_for_custom_model(label, current, question)
+                    if sys.stdin.isatty()
+                    else False
+                )
+            model_options[name] = choice
+
         result = run_wagtail_start(
             project_name=project_name,
             site_name=site_name,
@@ -268,6 +317,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             project_root=project_root,
             site_subfolder=site_subfolder,
             template=template,
+            custom_user=model_options["custom_user"],
+            custom_images=model_options["custom_images"],
         )
         if result == 0 and arguments.directory is None:
             action = "Using" if project_root_exists else "Created"

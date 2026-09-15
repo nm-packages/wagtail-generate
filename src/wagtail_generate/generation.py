@@ -12,6 +12,7 @@ from wagtail_generate.developer_tools import (
     apply_developer_tooling_plan,
     configure_database,
 )
+from wagtail_generate.model_options import configure_models
 
 # Retain the existing imports for callers while planning owns these definitions.
 from wagtail_generate.planning import UV_COMMAND as UV_COMMAND
@@ -49,6 +50,8 @@ def run_wagtail_start(
     template: Path | None = None,
     allow_playground: bool = False,
     dependency_resolver: DependencyResolver | None = None,
+    custom_user: bool = False,
+    custom_images: bool = False,
 ) -> int:
     """Initialize a UV project, install Wagtail, and generate into that project."""
     project_directory = (project_root or Path.cwd()).resolve()
@@ -59,6 +62,8 @@ def run_wagtail_start(
         project_root=project_directory,
         site_subfolder=site_subfolder,
         template=template,
+        custom_user=custom_user,
+        custom_images=custom_images,
     )
 
     try:
@@ -204,6 +209,13 @@ def _execute_generation_plan_in_directory(
     if settings_file is None:
         return 2
     _configure_project(plan, project_directory, settings_file)
+    for command in plan.model_commands:
+        run_command(
+            command.arguments,
+            cwd=project_directory,
+            stage="models",
+            description=command.description,
+        )
     _format_project(plan, project_directory)
     return 0
 
@@ -273,6 +285,15 @@ def _configure_project(
 ) -> None:
     """Apply the site name, database, developer tooling, and planned documentation."""
     options = plan.options
+    configure_models(
+        project_directory,
+        settings_file,
+        plan.model_files,
+        options.source_directory,
+        options.custom_user,
+        options.custom_images,
+        plan.model_settings,
+    )
     _set_wagtail_site_name(settings_file, options.site_name)
     configure_database(
         settings_file,

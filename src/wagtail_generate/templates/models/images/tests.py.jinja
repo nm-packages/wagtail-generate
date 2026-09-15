@@ -1,0 +1,35 @@
+import shutil
+import tempfile
+from io import BytesIO
+
+from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase
+from django.urls import reverse
+from PIL import Image as PillowImage
+from wagtail.images import get_image_model
+from wagtail.models import Collection
+
+
+class ImageTests(TestCase):
+    def test_upload_and_rendition(self):
+        media_root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, media_root)
+        user = get_user_model().objects.create_superuser(
+            username="image-admin", email="images@example.test", password="test-password"
+        )
+        self.client.force_login(user)
+        buffer = BytesIO()
+        PillowImage.new("RGB", (100, 100), "blue").save(buffer, format="PNG")
+        with self.settings(MEDIA_ROOT=media_root):
+            response = self.client.post(reverse("wagtailimages:add"), {
+                "title": "Test image",
+                "file": SimpleUploadedFile("test.png", buffer.getvalue(), "image/png"),
+                "collection": Collection.get_first_root_node().pk,
+            })
+            self.assertEqual(response.status_code, 302)
+            image = get_image_model().objects.get(title="Test image")
+            rendition = image.get_rendition("width-50")
+            self.assertEqual(rendition.width, 50)
+            self.assertEqual(rendition.image_id, image.pk)
+            self.assertEqual(image.get_rendition("width-50").pk, rendition.pk)

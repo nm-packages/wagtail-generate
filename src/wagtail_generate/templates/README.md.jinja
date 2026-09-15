@@ -166,3 +166,28 @@ If a formatter changes files during that first run, inspect the changes and run
 
 Use `uv add` and `uv remove` for dependencies. `pyproject.toml` and `uv.lock` are
 authoritative; this project intentionally does not use `requirements.txt`.
+
+## User and image models
+
+- User model: `{{ user_model | default('auth.User') }}`
+- Image model: `{{ image_model | default('wagtailimages.Image') }}`
+
+Custom model choices are made before the first migration. When selected, the
+`accounts` app preserves standard username/password authentication, and the
+`images` app supplies an image/rendition pair without extra metadata. Initial
+migrations are included; run them using the setup commands above. Switching models
+after data exists requires separate schema and data migration planning.
+
+Use `settings.AUTH_USER_MODEL` for user relations and `get_user_model()` for runtime
+access. Use `wagtail.images.get_image_model_string()` for image relations and
+`wagtail.images.get_image_model()` for runtime access. Avoid hard-coded default
+model imports. App module paths follow the source layout; model labels do not.
+
+Per-use alt text describes an image in its context. Use Wagtail's supported
+`ImageBlock` behaviour for contextual alt text and decorative images; do not add
+a global alt-text field to the image model as a substitute. Attribution/copyright
+fields can be added deliberately when needed.
+
+These settings are documented here; reusable generator configuration is not yet
+saved. For custom templates with undetermined settings, inspect the template's
+settings modules for the effective values.
