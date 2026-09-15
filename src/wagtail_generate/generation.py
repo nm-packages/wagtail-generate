@@ -164,13 +164,16 @@ def resolve_dependencies(
     )
     pinned: dict[str, str] = {}
     for name in requirements.all:
-        prefix = name.lower() + "=="
+        # UV emits base distributions without extras; retain the requested extras
+        # when pinning so installation still includes their dependencies.
+        distribution = name.partition("[")[0]
+        prefix = distribution.lower() + "=="
         match = next(
             (line for line in resolved if line.lower().startswith(prefix)), None
         )
         if match is None:
             raise ValueError(f"UV did not resolve direct dependency: {name}")
-        pinned[name] = match
+        pinned[name] = name + match[len(distribution) :]
     return ResolvedDependencies(
         runtime=tuple(pinned[name] for name in requirements.runtime),
         development=tuple(pinned[name] for name in requirements.development),

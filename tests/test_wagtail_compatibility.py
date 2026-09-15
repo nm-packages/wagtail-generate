@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,36 @@ def _generated_python(project_root: Path) -> Path:
     executable = "python.exe" if os.name == "nt" else "python"
     directory = "Scripts" if os.name == "nt" else "bin"
     return project_root / ".venv" / directory / executable
+
+
+@pytest.mark.skipif(not COMPATIBILITY_ENABLED, reason="opt-in real Wagtail check")
+def test_real_postgresql_generation_preserves_binary_driver(tmp_path: Path) -> None:
+    project_root = tmp_path / "postgresql"
+    assert (
+        run_wagtail_start(
+            "example",
+            database="postgresql",
+            project_root=project_root,
+            site_subfolder=Path("src"),
+        )
+        == 0
+    )
+    configuration = tomllib.loads((project_root / "pyproject.toml").read_text())
+    assert any(
+        dependency.startswith("psycopg[binary]==")
+        for dependency in configuration["project"]["dependencies"]
+    )
+    lockfile = tomllib.loads((project_root / "uv.lock").read_text())
+    assert {"psycopg", "psycopg-binary"} <= {
+        package["name"] for package in lockfile["package"]
+    }
+    python = str(_generated_python(project_root))
+    subprocess.run(
+        [python, "-c", "from psycopg import pq; assert pq.__impl__ == 'binary'"],
+        cwd=project_root,
+        check=True,
+    )
+    subprocess.run([python, "manage.py", "check"], cwd=project_root, check=True)
 
 
 @pytest.mark.parametrize(
