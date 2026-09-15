@@ -97,10 +97,13 @@ wagtail-generate start example --site-name "Example" --site-directory src --star
 
 This option works independently of custom models and requires no Node, frontend
 workflow, or website preset. Both root and source-subfolder layouts are supported.
-The standalone template lives in `home/templates/home/home_page.html`, with styles
+The homepage template lives in `home/templates/home/home_page.html`, with styles
 in `home/static/home/css/starter-homepage.css`, under the selected source directory.
-It does not inherit the project's `base.html`; edit it to add shared layout blocks
-or extend the CSS with a future frontend workflow or website preset.
+It extends the project's `base.html`, preserving the generated document metadata,
+global assets, Wagtail user bar, and any existing `content` and `extra_css` block
+behaviour. Customize the page through those blocks or extend the stylesheet with a
+future frontend workflow or website preset. Custom base templates must expose the
+`content` and `extra_css` blocks used by the starter template.
 
 Custom templates are preserved unless replacement is explicitly requested. For
 replacement, supply an inspectable template directory containing those conventional
