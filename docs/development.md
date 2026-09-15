@@ -266,7 +266,11 @@ guidance are recorded in the generated README. Saved configuration is deferred.
 offers a default-no homepage replacement prompt. `--starter-homepage` and
 `--no-starter-homepage` bypass the prompt; non-interactive omission preserves the
 existing homepage. `homepage.py` validates the conventional home app and plans packaged HTML
-and CSS in `GenerationPlan.homepage_files`. Execution revalidates the staged Wagtail
+and CSS in `GenerationPlan.homepage_files`. The homepage extends the generated
+`base.html`, placing its markup in `content` and its stylesheet in `extra_css`
+while preserving `block.super`. This retains the base template's metadata, global
+assets, preview support, and Wagtail user bar. Custom base templates must expose
+these blocks. Execution revalidates the staged Wagtail
 output before writing them. `GenerationPlan.homepage_removals` lists the two
 welcome-screen files to remove: `home/templates/home/welcome_page.html` and
 `home/static/css/welcome_page.css`. Cleanup uses explicit paths, tolerates missing
