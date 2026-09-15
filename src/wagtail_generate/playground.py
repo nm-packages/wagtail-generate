@@ -9,7 +9,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from wagtail_generate.generation import UV_COMMAND, run_wagtail_start
+from wagtail_generate.cli import (
+    add_generation_arguments,
+    normalize_package_name,
+    normalize_subfolder,
+    validate_site_name,
+)
+from wagtail_generate.generation import UV_COMMAND, Database, run_wagtail_start
 from wagtail_generate.safety import source_checkout_root
 
 MARKER = ".wagtail-generate-playground"
@@ -21,6 +27,14 @@ class PlaygroundOptions:
 
     reset: bool
     site_subfolder: Path | None
+    project_name: str = "playground"
+    site_name: str = "Developer Playground"
+    database: Database = "sqlite3"
+    template: Path | None = None
+    starter_homepage: bool = False
+    custom_user: bool = False
+    custom_images: bool = False
+    generate_only: bool = False
 
 
 def playground_directory() -> Path:
@@ -47,21 +61,59 @@ def reset_playground(destination: Path) -> None:
 
 
 def parse_arguments(argv: Sequence[str] | None = None) -> PlaygroundOptions:
-    """Parse playground options without inspecting or changing the checkout."""
+    """Validate playground choices and template paths before any reset."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--reset", action="store_true", help="Remove the playground only"
     )
     parser.add_argument(
-        "--site-directory",
-        choices=(".", "src"),
-        default=".",
-        help="Generate Wagtail code at the project root (default) or in src/",
+        "--generate-only",
+        action="store_true",
+        help="Generate without application setup or serving",
+    )
+    parser.add_argument(
+        "--project-name",
+        default="playground",
+        help="Python project name; defaults to playground",
+    )
+    add_generation_arguments(parser, interactive=False)
+    parser.set_defaults(
+        site_directory=Path("."),
+        site_name="Developer Playground",
+        starter_homepage=False,
+        custom_user=False,
+        custom_images=False,
     )
     arguments = parser.parse_args(argv)
+    try:
+        project_name = normalize_package_name(arguments.project_name)
+        site_name = validate_site_name(arguments.site_name)
+        site_subfolder = (
+            None
+            if arguments.site_directory == Path(".")
+            else normalize_subfolder(str(arguments.site_directory))
+        )
+        template = arguments.template
+        if template is not None:
+            template = template.resolve()
+            if not template.exists():
+                raise ValueError(f"Wagtail project template does not exist: {template}")
+            destination = playground_directory()
+            if template.is_relative_to(destination):
+                raise ValueError("template must be outside the playground being reset")
+    except ValueError as error:
+        parser.error(str(error))
     return PlaygroundOptions(
         reset=arguments.reset,
-        site_subfolder=(Path("src") if arguments.site_directory == "src" else None),
+        site_subfolder=site_subfolder,
+        project_name=project_name,
+        site_name=site_name,
+        database=arguments.database,
+        template=template,
+        starter_homepage=arguments.starter_homepage,
+        custom_user=arguments.custom_user,
+        custom_images=arguments.custom_images,
+        generate_only=arguments.generate_only,
     )
 
 
@@ -86,14 +138,18 @@ def run_playground_command(
     ).returncode
 
 
-def generate_playground(destination: Path, site_subfolder: Path | None) -> int:
+def generate_playground(destination: Path, options: PlaygroundOptions) -> int:
     """Generate the disposable Wagtail project and mark it as recognized."""
     result = run_wagtail_start(
-        project_name="playground",
-        site_name="Developer Playground",
+        project_name=options.project_name,
+        site_name=options.site_name,
         project_root=destination,
-        database="sqlite3",
-        site_subfolder=site_subfolder,
+        database=options.database,
+        site_subfolder=options.site_subfolder,
+        template=options.template,
+        starter_homepage=options.starter_homepage,
+        custom_user=options.custom_user,
+        custom_images=options.custom_images,
         allow_playground=True,
     )
     if result == 0:
@@ -168,8 +224,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         if options.reset:
             print("Playground reset.")
             return 0
-        result = generate_playground(destination, options.site_subfolder)
-        if result:
+        result = generate_playground(destination, options)
+        if result or options.generate_only:
             return result
         environment = playground_environment()
         for step in (

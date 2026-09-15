@@ -96,16 +96,31 @@ apply migrations, create an administrator, run checks, and start the server:
 make playground
 ```
 
-Use `make playground SITE_DIRECTORY=src` to exercise the source-subfolder layout;
-use `make playground SITE_DIRECTORY=.` (the default) for code at the project root.
-Only `.` and `src` are accepted.
+This single command generates one site with:
+
+- SQLite as the database.
+- Wagtail code in `src/`.
+- The starter homepage.
+- Custom user, image, and rendition models.
+
+The project is named `playground`, with display name `Developer Playground`, and
+uses the standard Wagtail template. No arguments or Make variables are needed.
+`make help` lists the playground and reset commands.
+
+The underlying Python runner still accepts generation options for focused debugging;
+run `uv run python -m wagtail_generate.playground --help` for its option reference.
+It shares option definitions with the main CLI. The Make workflow always passes the
+configuration above; `PLAYGROUND_ARGS` and the former Make configuration variables
+are no longer used. The destination is always `.playground/`.
+Invalid options and template paths are rejected before resetting the existing site,
+and custom templates must be outside `.playground/`.
 
 Open <http://127.0.0.1:8000/admin/> and sign in with username `admin` and password
 `playground` (email: `admin@example.test`). These credentials are for this
 disposable local site only.
 
 Stop the server with Ctrl-C before rebuilding or resetting. Every run replaces
-`.playground/`, including its database. To remove it without rebuilding:
+`.playground/`, including its SQLite database. To remove it without rebuilding:
 
 ```shell
 make playground-reset
@@ -216,8 +231,10 @@ in the generated project's environment rather than becoming a generator runtime
 dependency.
 
 `playground.py` is the disposable in-checkout workflow. `parse_arguments()` only
-validates the two supported choices, then `main()` resets the recognized directory,
-calls the generator, and runs explicit `prepare_playground()`,
+parses and validates generation choices (using shared CLI definitions), then
+`main()` resets the recognized directory,
+calls the generator, and, unless `--generate-only` is selected, runs explicit
+`prepare_playground()`,
 `create_playground_administrator()`, `check_playground()`, and `serve_playground()`
 steps. Each step receives its command and environment directly; command names are
 not inspected to decide whether to add credentials or print server information.

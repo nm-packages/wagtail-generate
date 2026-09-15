@@ -130,6 +130,61 @@ def prompt_yes_no(
         print("Please answer yes or no.")
 
 
+def add_generation_arguments(
+    parser: argparse.ArgumentParser, *, interactive: bool = True
+) -> None:
+    """Register generation choices shared by the CLI and developer playground."""
+    parser.add_argument(
+        "--site-name",
+        help=(
+            "Human-facing Wagtail site name; prompted for when omitted."
+            if interactive
+            else "Human-facing Wagtail site name; defaults to Developer Playground."
+        ),
+    )
+    parser.add_argument(
+        "--database",
+        choices=("sqlite3", "postgresql", "mysql"),
+        default="sqlite3",
+        help="Database backend; defaults to sqlite3.",
+    )
+    parser.add_argument(
+        "--site-directory",
+        type=Path,
+        default=argparse.SUPPRESS,
+        help=(
+            "Non-interactive Wagtail code directory relative to the project root; "
+            "use '.' for the root."
+        ),
+    )
+    parser.add_argument(
+        "--template",
+        type=Path,
+        help="Optional custom Wagtail project template path.",
+    )
+    parser.add_argument(
+        "--starter-homepage",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Use a starter homepage; prompts in a terminal, otherwise disabled."
+            if interactive
+            else "Use a starter homepage; disabled by default."
+        ),
+    )
+    for name in ("custom-user", "custom-images"):
+        parser.add_argument(
+            f"--{name}",
+            action=argparse.BooleanOptionalAction,
+            default=None,
+            help=(
+                "Create custom models; prompts in a terminal, otherwise disabled"
+                if interactive
+                else "Create custom models; disabled by default."
+            ),
+        )
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Create the command-line argument parser."""
     parser = argparse.ArgumentParser(
@@ -151,49 +206,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     start_parser.add_argument("project_name", help="Name for the Wagtail project.")
     start_parser.add_argument(
-        "--site-name",
-        help="Human-facing Wagtail site name; prompted for when omitted.",
-    )
-    start_parser.add_argument(
-        "--database",
-        choices=("sqlite3", "postgresql", "mysql"),
-        default="sqlite3",
-        help="Database backend; defaults to sqlite3.",
-    )
-    start_parser.add_argument(
         "--directory",
         type=Path,
         help=(
             "UV project root; defaults to a site-name folder in the current directory."
         ),
     )
-    start_parser.add_argument(
-        "--site-directory",
-        type=Path,
-        default=argparse.SUPPRESS,
-        help=(
-            "Non-interactive Wagtail code directory relative to the project root; "
-            "use '.' for the root."
-        ),
-    )
-    start_parser.add_argument(
-        "--template",
-        type=Path,
-        help="Optional custom Wagtail project template path.",
-    )
-    start_parser.add_argument(
-        "--starter-homepage",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-        help="Use a starter homepage; prompts in a terminal, otherwise disabled.",
-    )
-    for name in ("custom-user", "custom-images"):
-        start_parser.add_argument(
-            f"--{name}",
-            action=argparse.BooleanOptionalAction,
-            default=None,
-            help="Create custom models; prompts in a terminal, otherwise disabled",
-        )
+    add_generation_arguments(start_parser)
     return parser
 
 
