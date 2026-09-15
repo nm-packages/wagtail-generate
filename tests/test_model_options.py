@@ -82,13 +82,13 @@ def test_cli_model_choices(tmp_path, interactive, flags, expected):
         generate.call_args.kwargs["custom_user"],
         generate.call_args.kwargs["custom_images"],
     ) == expected
-    assert read_input.call_count == (2 - len(flags) if interactive else 0)
+    assert read_input.call_count == (3 - len(flags) if interactive else 0)
 
 
 def test_interactive_choices_are_independent(tmp_path, capsys):
     with (
         patch("wagtail_generate.cli.sys.stdin.isatty", return_value=True),
-        patch("builtins.input", side_effect=["yes", "no"]),
+        patch("builtins.input", side_effect=["yes", "no", "no"]),
         patch("wagtail_generate.cli.run_wagtail_start", return_value=0) as generate,
     ):
         main(

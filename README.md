@@ -76,3 +76,39 @@ settings are displayed when identifiable; computed or ambiguous settings are
 reported as undetermined. Choosing Yes rejects existing model settings, conflicting
 app paths, or app labels, rather than merging models. Custom model options require
 a local template directory and a literal `INSTALLED_APPS` list or tuple.
+
+### Starter homepage
+
+By default, generation preserves the homepage supplied by Wagtail or your custom
+project template. During interactive generation, you are offered the choice:
+
+```text
+Replace the template homepage with a simple styled starter? [y/N]:
+```
+
+Answer yes for a responsive homepage using semantic HTML and plain CSS, or press
+Enter to preserve the existing homepage. For scripts, pass `--starter-homepage`
+or `--no-starter-homepage` to select the behaviour without a prompt. When input
+is not a terminal, omission preserves the existing homepage. For example:
+
+```shell
+wagtail-generate start example --site-name "Example" --site-directory src --starter-homepage
+```
+
+This option works independently of custom models and requires no Node, frontend
+workflow, or website preset. Both root and source-subfolder layouts are supported.
+The standalone template lives in `home/templates/home/home_page.html`, with styles
+in `home/static/home/css/starter-homepage.css`, under the selected source directory.
+It does not inherit the project's `base.html`; edit it to add shared layout blocks
+or extend the CSS with a future frontend workflow or website preset.
+
+Custom templates are preserved unless replacement is explicitly requested. For
+replacement, supply an inspectable template directory containing those conventional
+homepage template and model paths. `home/models.py` must define `HomePage(Page)`
+without custom `serve`, `get_template`, or `get_context` methods, and any explicit
+`template` or `ajax_template` must be `home/home_page.html`. Templates that use
+another homepage structure or an archive are rejected with a clear error. Keep
+custom URL routing and template-loader configuration compatible with this path.
+Replacement also removes the default `home/templates/home/welcome_page.html`
+and `home/static/css/welcome_page.css` files when present, including in custom
+templates. Other assets, shared templates, model fields, and migrations are retained.

@@ -242,3 +242,18 @@ is owned by Django; application templates remain under `templates/models/`.
 Real-Wagtail compatibility checks cover four model combinations in each layout,
 including migration drift and generated-site tests. Model settings and extension
 guidance are recorded in the generated README. Saved configuration is deferred.
+
+### Starter homepage option
+
+`ProjectOptions.starter_homepage` defaults to false. Interactive CLI generation
+offers a default-no homepage replacement prompt. `--starter-homepage` and
+`--no-starter-homepage` bypass the prompt; non-interactive omission preserves the
+existing homepage. `homepage.py` validates the conventional home app and plans packaged HTML
+and CSS in `GenerationPlan.homepage_files`. Execution revalidates the staged Wagtail
+output before writing them. `GenerationPlan.homepage_removals` lists the two
+welcome-screen files to remove: `home/templates/home/welcome_page.html` and
+`home/static/css/welcome_page.css`. Cleanup uses explicit paths, tolerates missing
+files, and rejects symlinks and unexpected directories. Default generation leaves custom homepage content
+untouched. Unsupported custom homepage structures fail without publishing a
+partial project. Templates live under `templates/homepage/`; keep future frontend
+workflows and website presets able to reuse or extend these files independently.

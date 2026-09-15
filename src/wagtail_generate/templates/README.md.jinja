@@ -191,3 +191,22 @@ fields can be added deliberately when needed.
 These settings are documented here; reusable generator configuration is not yet
 saved. For custom templates with undetermined settings, inspect the template's
 settings modules for the effective values.
+
+## Homepage
+
+{% if starter_homepage | default(false) -%}
+The starter homepage is enabled. The default `home/templates/home/welcome_page.html`
+and `home/static/css/welcome_page.css` files have been removed if present. Edit
+`{{ source_directory }}/home/templates/home/home_page.html` and
+`{{ source_directory }}/home/static/home/css/starter-homepage.css` to change its
+content and styling. It uses plain CSS and needs no Node or frontend build step.
+The template is a standalone HTML document; it does not inherit `base.html`.
+Wagtail supplies the page title and site name. Future frontend tooling can extend
+or replace this stylesheet, and richer page content can be added to the template.
+{% else -%}
+The homepage supplied by the Wagtail project template is preserved. During
+interactive generation, answer yes to the homepage replacement prompt to select
+a simple homepage with plain CSS and no frontend build step. Scripts can pass
+`--starter-homepage` or `--no-starter-homepage` to choose without a prompt.
+Pressing Enter or omitting the option in non-interactive use preserves the homepage.
+{% endif -%}

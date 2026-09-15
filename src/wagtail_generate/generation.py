@@ -12,6 +12,7 @@ from wagtail_generate.developer_tools import (
     apply_developer_tooling_plan,
     configure_database,
 )
+from wagtail_generate.homepage import configure_homepage
 from wagtail_generate.model_options import configure_models
 
 # Retain the existing imports for callers while planning owns these definitions.
@@ -52,6 +53,7 @@ def run_wagtail_start(
     dependency_resolver: DependencyResolver | None = None,
     custom_user: bool = False,
     custom_images: bool = False,
+    starter_homepage: bool = False,
 ) -> int:
     """Initialize a UV project, install Wagtail, and generate into that project."""
     project_directory = (project_root or Path.cwd()).resolve()
@@ -64,6 +66,7 @@ def run_wagtail_start(
         template=template,
         custom_user=custom_user,
         custom_images=custom_images,
+        starter_homepage=starter_homepage,
     )
 
     try:
@@ -293,6 +296,12 @@ def _configure_project(
         options.custom_user,
         options.custom_images,
         plan.model_settings,
+    )
+    configure_homepage(
+        project_directory,
+        options.source_directory,
+        plan.homepage_files,
+        plan.homepage_removals,
     )
     _set_wagtail_site_name(settings_file, options.site_name)
     configure_database(

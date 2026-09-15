@@ -10,6 +10,7 @@ from wagtail_generate.developer_tools import (
     build_developer_tooling_plan,
     database_driver,
 )
+from wagtail_generate.homepage import build_homepage_files, plan_homepage_removals
 from wagtail_generate.model_options import build_model_files, inspect_template_models
 from wagtail_generate.rendering import RenderedFile, plan_template, render_template
 from wagtail_generate.safety import validate_source_package
@@ -31,6 +32,7 @@ class ProjectOptions:
     template: Path | None
     custom_user: bool = False
     custom_images: bool = False
+    starter_homepage: bool = False
 
     @property
     def source_directory(self) -> str:
@@ -90,6 +92,8 @@ class GenerationPlan:
     developer_tooling: DeveloperToolingPlan
     documentation_files: tuple[RenderedFile, ...]
     resolved_dependencies: ResolvedDependencies
+    homepage_files: tuple[RenderedFile, ...] = ()
+    homepage_removals: tuple[Path, ...] = ()
     model_settings: str = ""
     model_files: tuple[RenderedFile, ...] = ()
     model_commands: tuple[CommandPlan, ...] = ()
@@ -122,6 +126,15 @@ def build_generation_plan(
     )
     return GenerationPlan(
         options=options,
+        homepage_files=build_homepage_files(
+            options.source_directory,
+            options.starter_homepage,
+            options.template,
+        ),
+        homepage_removals=plan_homepage_removals(
+            options.source_directory,
+            options.starter_homepage,
+        ),
         model_files=model_files,
         model_settings=render_template(
             "models/settings.py.jinja",
@@ -235,6 +248,7 @@ def _plan_documentation_files(
     )
     current_models = inspect_template_models(options.template)
     documentation_context = {
+        "starter_homepage": options.starter_homepage,
         "user_model": "accounts.User" if options.custom_user else current_models[0],
         "image_model": "images.CustomImage"
         if options.custom_images
