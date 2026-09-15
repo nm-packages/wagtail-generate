@@ -1,36 +1,30 @@
-{% load i18n static wagtailcore_tags %}
-{% get_current_language as language_code %}
-<!DOCTYPE html>
-<html lang="{{ language_code }}">
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        {% wagtail_site as current_site %}
-        <title>{{ page.seo_title|default:page.title }} — {{ current_site.site_name }}</title>
-        {% if page.search_description %}
-            <meta name="description" content="{{ page.search_description }}">
-        {% endif %}
-        <link rel="stylesheet" href="{% static 'home/css/starter-homepage.css' %}">
-    </head>
-    <body>
-        <header class="site-header">
-            <span>{{ current_site.site_name }}</span>
-        </header>
-        <main id="main-content">
-            <p class="eyebrow">A new beginning</p>
-            <h1>{{ page.title }}</h1>
-            <p class="introduction">A space for ideas, stories, and everything that comes next.</p>
-            <section aria-labelledby="about-heading">
-                <h2 id="about-heading">Make yourself at home</h2>
-                <p>We’re just getting started. There’s more to share soon.</p>
-            </section>
-            <p class="admin-access">
-                <a href="{% url 'wagtailadmin_home' %}" aria-describedby="admin-account-note">Open admin</a>
-                <span id="admin-account-note">An admin account is required.</span>
-            </p>
-        </main>
-        <footer class="site-footer">
-            <p>{{ current_site.site_name }}</p>
-        </footer>
-    </body>
-</html>
+{% extends "base.html" %}
+{% load static wagtailcore_tags %}
+
+{% block extra_css %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'home/css/starter-homepage.css' %}">
+{% endblock %}
+
+{% block content %}
+    {% wagtail_site as current_site %}
+    <header class="site-header">
+        <span>{{ current_site.site_name }}</span>
+    </header>
+    <main id="main-content">
+        <p class="eyebrow">A new beginning</p>
+        <h1>{{ page.title }}</h1>
+        <p class="introduction">A space for ideas, stories, and everything that comes next.</p>
+        <section aria-labelledby="about-heading">
+            <h2 id="about-heading">Make yourself at home</h2>
+            <p>We’re just getting started. There’s more to share soon.</p>
+        </section>
+        <p class="admin-access">
+            <a href="{% url 'wagtailadmin_home' %}" aria-describedby="admin-account-note">Open admin</a>
+            <span id="admin-account-note">An admin account is required.</span>
+        </p>
+    </main>
+    <footer class="site-footer">
+        <p>{{ current_site.site_name }}</p>
+    </footer>
+{% endblock %}

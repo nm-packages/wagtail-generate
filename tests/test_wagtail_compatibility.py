@@ -137,6 +137,10 @@ assert 'href="/admin/"' in html
 assert 'An admin account is required.' in html
 assert 'Welcome to your new Wagtail site' not in html
 assert '/static/home/css/starter-homepage.css' in html
+assert '/static/css/example.css' in html
+assert '/static/js/example.js' in html
+assert html.lower().count('<!doctype html>') == 1
+assert html.count('<html') == 1
 assert finders.find('home/css/starter-homepage.css')
 response = serve(RequestFactory().get('/static/home/css/starter-homepage.css'),
                  'home/css/starter-homepage.css', insecure=True)

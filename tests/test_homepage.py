@@ -84,7 +84,12 @@ def test_plan_and_custom_homepage_replacement(tmp_path, source, enabled):
     if enabled:
         assert "<main" in html
         assert "welcome_page" not in html
-        assert "base.html" not in html
+        assert html.startswith('{% extends "base.html" %}')
+        assert "{% block content %}" in html
+        assert "{% block extra_css %}" in html
+        assert "{{ block.super }}" in html
+        assert "<!DOCTYPE" not in html
+        assert "<html" not in html
         assert "{% static 'home/css/starter-homepage.css' %}" in html
         css = destination / source / "home/static/home/css/starter-homepage.css"
         assert "clamp(" in css.read_text()

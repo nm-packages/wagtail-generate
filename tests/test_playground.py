@@ -139,7 +139,9 @@ def test_generation_failure_does_not_leave_playground_marker(
     destination: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(playground, "run_wagtail_start", Mock(return_value=1))
-    assert playground.generate_playground(destination, None) == 1
+    assert (
+        playground.generate_playground(destination, playground.parse_arguments([])) == 1
+    )
     assert not (destination / playground.MARKER).exists()
 
 
@@ -226,7 +228,7 @@ def test_main_converts_keyboard_interrupt_to_shell_status(
     assert playground.main([]) == 130
 
 
-@pytest.mark.parametrize("value", ["../src", "/tmp/src", "invalid"])
+@pytest.mark.parametrize("value", ["../src", "/tmp/src", "wagtail"])
 def test_invalid_site_directory_does_not_reset(
     destination: Path, monkeypatch: pytest.MonkeyPatch, value: str
 ) -> None:
@@ -236,3 +238,111 @@ def test_invalid_site_directory_does_not_reset(
         playground.main(["--site-directory", value])
     assert error.value.code == 2
     reset.assert_not_called()
+
+
+@pytest.mark.parametrize("database", ["sqlite3", "postgresql", "mysql"])
+def test_generation_options_reach_generator(
+    destination: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, database: str
+) -> None:
+    template = tmp_path / "custom template"
+    template.mkdir()
+    generate = Mock(return_value=0)
+
+    def generate_site(**kwargs: object) -> int:
+        destination.mkdir()
+        return int(generate(**kwargs))
+
+    monkeypatch.setattr(playground, "run_wagtail_start", generate_site)
+    run = Mock()
+    monkeypatch.setattr(playground.subprocess, "run", run)
+    assert (
+        playground.main(
+            [
+                "--project-name",
+                "Example Project",
+                "--site-name",
+                "Example Site",
+                "--database",
+                database,
+                "--site-directory",
+                "Site Code/backend",
+                "--template",
+                str(template),
+                "--custom-user",
+                "--custom-images",
+                "--starter-homepage",
+                "--generate-only",
+            ]
+        )
+        == 0
+    )
+    generate.assert_called_once_with(
+        project_name="example_project",
+        site_name="Example Site",
+        database=database,
+        project_root=destination,
+        site_subfolder=Path("site_code/backend"),
+        template=template,
+        custom_user=True,
+        custom_images=True,
+        starter_homepage=True,
+        allow_playground=True,
+    )
+    run.assert_not_called()
+    assert (destination / playground.MARKER).is_file()
+
+
+def test_boolean_options_can_be_explicitly_disabled() -> None:
+    options = playground.parse_arguments(
+        [
+            "--custom-user",
+            "--no-custom-user",
+            "--custom-images",
+            "--no-custom-images",
+            "--starter-homepage",
+            "--no-starter-homepage",
+        ]
+    )
+    assert not options.custom_user
+    assert not options.custom_images
+    assert not options.starter_homepage
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--database", "oracle"],
+        ["--site-name", " "],
+        ["--project-name", "!"],
+        ["--template", "/nonexistent/wagtail-template"],
+        ["--directory", "/tmp/other"],
+    ],
+)
+def test_invalid_options_preserve_existing_playground(
+    destination: Path, arguments: list[str]
+) -> None:
+    destination.mkdir()
+    marker = destination / playground.MARKER
+    marker.touch()
+    with pytest.raises(SystemExit) as error:
+        playground.main(arguments)
+    assert error.value.code == 2
+    assert marker.is_file()
+
+
+def test_template_inside_playground_is_rejected(destination: Path) -> None:
+    destination.mkdir()
+    marker = destination / playground.MARKER
+    marker.touch()
+    with pytest.raises(SystemExit) as error:
+        playground.main(["--template", str(destination)])
+    assert error.value.code == 2
+    assert marker.exists()
+
+
+def test_template_file_is_accepted_like_cli(destination: Path, tmp_path: Path) -> None:
+    template = tmp_path / "template.zip"
+    template.touch()
+    assert (
+        playground.parse_arguments(["--template", str(template)]).template == template
+    )
