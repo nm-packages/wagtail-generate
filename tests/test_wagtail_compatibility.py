@@ -93,3 +93,57 @@ def test_real_wagtail_output_passes_django_checks_and_migrations(
         assert (
             source_root / app / "migrations" / "0001_initial.py"
         ).exists() == enabled
+
+
+@pytest.mark.skipif(not COMPATIBILITY_ENABLED, reason="opt-in real Wagtail check")
+@pytest.mark.parametrize("site_subfolder", [None, Path("src")])
+def test_real_starter_homepage_response(tmp_path, site_subfolder):
+    project_root = tmp_path / "homepage"
+    assert (
+        run_wagtail_start(
+            "example",
+            project_root=project_root,
+            site_subfolder=site_subfolder,
+            starter_homepage=True,
+        )
+        == 0
+    )
+    source = project_root / (site_subfolder or Path("."))
+    assert not (source / "home/templates/home/welcome_page.html").exists()
+    assert not (source / "home/static/css/welcome_page.css").exists()
+    python = str(_generated_python(project_root))
+    subprocess.run(
+        [python, "manage.py", "migrate", "--noinput"],
+        cwd=project_root,
+        check=True,
+    )
+    subprocess.run(
+        [
+            python,
+            "manage.py",
+            "shell",
+            "-c",
+            """
+from django.test import Client, override_settings
+from django.contrib.staticfiles import finders
+from django.contrib.staticfiles.views import serve
+from django.test import RequestFactory
+with override_settings(ALLOWED_HOSTS=['testserver']):
+    response = Client().get('/')
+assert response.status_code == 200
+html = response.content.decode()
+assert 'A new beginning' in html
+assert 'href="/admin/"' in html
+assert 'An admin account is required.' in html
+assert 'Welcome to your new Wagtail site' not in html
+assert '/static/home/css/starter-homepage.css' in html
+assert finders.find('home/css/starter-homepage.css')
+response = serve(RequestFactory().get('/static/home/css/starter-homepage.css'),
+                 'home/css/starter-homepage.css', insecure=True)
+assert response.status_code == 200
+assert b'clamp(' in b''.join(response.streaming_content)
+""",
+        ],
+        cwd=project_root,
+        check=True,
+    )

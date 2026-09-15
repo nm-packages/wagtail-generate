@@ -101,6 +101,7 @@ def test_start_forwards_options_and_exit_code(
         template=None,
         custom_user=False,
         custom_images=False,
+        starter_homepage=False,
     )
     assert not output.exists()
 
@@ -155,6 +156,7 @@ def test_start_validates_site_name_directory_by_default(
             template=None,
             custom_user=False,
             custom_images=False,
+            starter_homepage=False,
         )
     find_checkout.assert_called_once_with()
 
@@ -188,6 +190,7 @@ def test_non_ascii_site_name_uses_project_name_as_directory_fallback(
         template=None,
         custom_user=False,
         custom_images=False,
+        starter_homepage=False,
     )
     assert not destination.exists()
 
@@ -507,6 +510,7 @@ def test_start_uses_normalized_project_name(
         template=None,
         custom_user=False,
         custom_images=False,
+        starter_homepage=False,
     )
 
 

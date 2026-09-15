@@ -109,6 +109,14 @@ def prompt_for_custom_model(
 ) -> bool:
     """Display the current model and ask an independent, default-no question."""
     print(f"Current {label} model: {current}")
+    return prompt_yes_no(question, input_fn)
+
+
+def prompt_yes_no(
+    question: str,
+    input_fn: Callable[[str], str] | None = None,
+) -> bool:
+    """Ask a default-no question, preserving the default when input ends."""
     read_input = input_fn or input
     while True:
         try:
@@ -172,6 +180,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--template",
         type=Path,
         help="Optional custom Wagtail project template path.",
+    )
+    start_parser.add_argument(
+        "--starter-homepage",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Use a starter homepage; prompts in a terminal, otherwise disabled.",
     )
     for name in ("custom-user", "custom-images"):
         start_parser.add_argument(
@@ -310,6 +324,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             model_options[name] = choice
 
+        starter_homepage = arguments.starter_homepage
+        if starter_homepage is None:
+            starter_homepage = (
+                prompt_yes_no(
+                    "Replace the template homepage with a simple styled starter?"
+                )
+                if sys.stdin.isatty()
+                else False
+            )
+
         result = run_wagtail_start(
             project_name=project_name,
             site_name=site_name,
@@ -317,6 +341,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             project_root=project_root,
             site_subfolder=site_subfolder,
             template=template,
+            starter_homepage=starter_homepage,
             custom_user=model_options["custom_user"],
             custom_images=model_options["custom_images"],
         )
