@@ -69,6 +69,18 @@ def test_parse_arguments_returns_explicit_options(
     assert options.site_subfolder == site_subfolder
 
 
+def test_invalid_project_name_is_rejected_during_parsing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reset = Mock()
+    monkeypatch.setattr(playground, "reset_playground", reset)
+
+    with pytest.raises(SystemExit):
+        playground.parse_arguments(["--project-name", "django"])
+
+    reset.assert_not_called()
+
+
 @pytest.mark.parametrize(
     ("arguments", "site_subfolder"),
     [
