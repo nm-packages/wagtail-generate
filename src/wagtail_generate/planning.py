@@ -10,7 +10,8 @@ from wagtail_generate.developer_tools import (
     build_developer_tooling_plan,
     database_driver,
 )
-from wagtail_generate.rendering import RenderedFile, plan_template
+from wagtail_generate.model_options import build_model_files, inspect_template_models
+from wagtail_generate.rendering import RenderedFile, plan_template, render_template
 from wagtail_generate.safety import validate_source_package
 
 UV_VERSION = "0.12.7"
@@ -28,6 +29,8 @@ class ProjectOptions:
     project_root: Path
     site_subfolder: Path | None
     template: Path | None
+    custom_user: bool = False
+    custom_images: bool = False
 
     @property
     def source_directory(self) -> str:
@@ -87,6 +90,9 @@ class GenerationPlan:
     developer_tooling: DeveloperToolingPlan
     documentation_files: tuple[RenderedFile, ...]
     resolved_dependencies: ResolvedDependencies
+    model_settings: str = ""
+    model_files: tuple[RenderedFile, ...] = ()
+    model_commands: tuple[CommandPlan, ...] = ()
 
 
 def build_generation_plan(
@@ -99,8 +105,50 @@ def build_generation_plan(
     if resolved_dependencies is None:
         resolved_dependencies = dependency_groups(options.database)
 
+    model_files = build_model_files(
+        options.source_directory,
+        options.project_name,
+        options.custom_user,
+        options.custom_images,
+        options.template,
+    )
+    model_apps = tuple(
+        name
+        for name, enabled in (
+            ("accounts", options.custom_user),
+            ("images", options.custom_images),
+        )
+        if enabled
+    )
     return GenerationPlan(
         options=options,
+        model_files=model_files,
+        model_settings=render_template(
+            "models/settings.py.jinja",
+            {
+                "custom_user": options.custom_user,
+                "custom_images": options.custom_images,
+            },
+        )
+        if model_apps
+        else "",
+        model_commands=(
+            CommandPlan(
+                (
+                    *UV_COMMAND,
+                    "run",
+                    "python",
+                    "manage.py",
+                    "makemigrations",
+                    *model_apps,
+                    "--noinput",
+                    "--no-header",
+                ),
+                "Create initial custom model migrations",
+            ),
+        )
+        if model_apps
+        else (),
         python_version=python_version,
         setup_commands=_plan_setup_commands(
             options,
@@ -185,7 +233,12 @@ def _plan_documentation_files(
         if options.template is not None
         else "the default Wagtail template"
     )
+    current_models = inspect_template_models(options.template)
     documentation_context = {
+        "user_model": "accounts.User" if options.custom_user else current_models[0],
+        "image_model": "images.CustomImage"
+        if options.custom_images
+        else current_models[1],
         "site_name": options.site_name,
         "project_name": options.project_name,
         "source_directory": options.source_directory,

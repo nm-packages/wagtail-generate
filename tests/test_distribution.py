@@ -116,9 +116,10 @@ def test_release_artifacts_include_license(tmp_path: Path) -> None:
                     "import sys; "
                     "options = ProjectOptions('example', 'Example', sys.argv[1], "
                     "Path('/tmp/generated'), None if sys.argv[2] == 'root' "
-                    "else Path('src'), None); "
+                    "else Path('src'), None, custom_user=True, custom_images=True); "
                     "plan = build_generation_plan(options, '3.14'); "
-                    "assert plan.options.database == sys.argv[1]; print('ok')",
+                    "assert plan.options.database == sys.argv[1]; "
+                    "assert len(plan.model_files) == 11; print('ok')",
                     database,
                     "root" if source_layout is None else "src",
                 ],

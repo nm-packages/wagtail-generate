@@ -1,0 +1,7 @@
+# Choose model replacements before the first database migration.
+{% if custom_user %}
+AUTH_USER_MODEL = "accounts.User"
+{% endif %}
+{% if custom_images %}
+WAGTAILIMAGES_IMAGE_MODEL = "images.CustomImage"
+{% endif %}

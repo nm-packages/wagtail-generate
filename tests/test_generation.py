@@ -549,6 +549,7 @@ def test_workflow_configures_before_formatting_and_publishes_complete_site(
     ("failure", "message", "exit_code"),
     [
         ("wagtail", "wagtail: Generate Wagtail site", 7),
+        ("models", "models: Create initial custom model migrations", 8),
         ("missing-package", "did not generate the expected example/ package", 2),
         ("conflict", "refusing to overwrite generated code", 2),
         ("configuration", "could not locate Wagtail's generated DATABASES setting", 2),
@@ -584,17 +585,22 @@ def test_workflow_failure_stops_before_formatting_and_cleans_staging(
                     settings.write_text(
                         settings.read_text().replace("DATABASES =", "OLD =")
                     )
+        if "makemigrations" in command and failure == "models":
+            return subprocess.CompletedProcess(command, returncode=8)
         return subprocess.CompletedProcess(command, returncode=0)
 
     run.side_effect = simulate_command
     assert (
         run_wagtail_start(
-            "example", project_root=destination, site_subfolder=Path("src")
+            "example",
+            project_root=destination,
+            site_subfolder=Path("src"),
+            custom_user=failure == "models",
         )
         == exit_code
     )
     assert message in capsys.readouterr().err
-    assert run.call_count == 6  # Environment setup and Wagtail only.
+    assert run.call_count == (7 if failure == "models" else 6)
     assert list(destination.iterdir()) == []
     assert not list(tmp_path.glob(".generated-*"))
 

@@ -22,6 +22,10 @@ def _generated_python(project_root: Path) -> Path:
     ("layout_name", "site_subfolder"),
     [("root", None), ("src", Path("src"))],
 )
+@pytest.mark.parametrize(
+    "custom_user,custom_images",
+    [(False, False), (True, False), (False, True), (True, True)],
+)
 @pytest.mark.skipif(
     not COMPATIBILITY_ENABLED,
     reason=(
@@ -31,6 +35,8 @@ def _generated_python(project_root: Path) -> Path:
 )
 def test_real_wagtail_output_passes_django_checks_and_migrations(
     layout_name: str,
+    custom_user: bool,
+    custom_images: bool,
     site_subfolder: Path | None,
     tmp_path: Path,
 ) -> None:
@@ -41,6 +47,8 @@ def test_real_wagtail_output_passes_django_checks_and_migrations(
         site_name="Example Website",
         project_root=project_root,
         site_subfolder=site_subfolder,
+        custom_user=custom_user,
+        custom_images=custom_images,
     )
 
     assert result == 0
@@ -74,3 +82,14 @@ def test_real_wagtail_output_passes_django_checks_and_migrations(
         cwd=project_root,
         check=True,
     )
+
+    for arguments in (("makemigrations", "--check", "--dry-run"), ("test",)):
+        subprocess.run(
+            [str(generated_python), "manage.py", *arguments],
+            cwd=project_root,
+            check=True,
+        )
+    for app, enabled in (("accounts", custom_user), ("images", custom_images)):
+        assert (
+            source_root / app / "migrations" / "0001_initial.py"
+        ).exists() == enabled

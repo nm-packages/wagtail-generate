@@ -1,0 +1,20 @@
+from django.db import models
+from wagtail.images.models import AbstractImage, AbstractRendition, Image as WagtailImage
+
+
+class CustomImage(AbstractImage):
+    """Project image model, ready for future metadata fields."""
+
+    admin_form_fields = WagtailImage.admin_form_fields
+
+
+class CustomRendition(AbstractRendition):
+    image = models.ForeignKey(CustomImage, on_delete=models.CASCADE, related_name="renditions")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("image", "filter_spec", "focal_point_key"),
+                name="images_rendition_unique",
+            ),
+        ]

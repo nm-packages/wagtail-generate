@@ -1,0 +1,42 @@
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+from django.urls import reverse
+
+
+class UserTests(TestCase):
+    def test_administrator_login_and_user_forms(self):
+        user = get_user_model().objects.create_superuser(
+            username="administrator", email="admin@example.test", password="test-password"
+        )
+        self.assertTrue(self.client.login(username=user.username, password="test-password"))
+        for name, args in (
+            ("wagtailadmin_home", []),
+            ("wagtailusers_users:index", []),
+            ("wagtailusers_users:add", []),
+            ("wagtailusers_users:edit", [user.pk]),
+            ("admin:accounts_user_add", []),
+            ("admin:accounts_user_change", [user.pk]),
+        ):
+            with self.subTest(view=name):
+                self.assertEqual(self.client.get(reverse(name, args=args)).status_code, 200)
+
+    def test_wagtail_user_creation_and_editing(self):
+        administrator = get_user_model().objects.create_superuser(
+            username="administrator", email="admin@example.test", password="test-password"
+        )
+        self.client.force_login(administrator)
+        response = self.client.post(reverse("wagtailusers_users:add"), {
+            "username": "editor", "email": "editor@example.test",
+            "first_name": "Original", "last_name": "Editor",
+            "password1": "A-long-editor-password-52",
+            "password2": "A-long-editor-password-52",
+        })
+        self.assertEqual(response.status_code, 302)
+        editor = get_user_model().objects.get(username="editor")
+        response = self.client.post(reverse("wagtailusers_users:edit", args=[editor.pk]), {
+            "username": "editor", "email": "editor@example.test",
+            "first_name": "Updated", "last_name": "Editor", "is_active": "on",
+        })
+        self.assertEqual(response.status_code, 302)
+        editor.refresh_from_db()
+        self.assertEqual(editor.first_name, "Updated")

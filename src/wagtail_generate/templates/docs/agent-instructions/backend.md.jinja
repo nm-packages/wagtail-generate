@@ -57,3 +57,11 @@
   unbounded lists, and add query-count tests for relevant performance fixes.
 - Introduce caching only with a clear invalidation strategy that respects
   publication state, permissions, and localization where applicable.
+
+## Model references
+
+Use `settings.AUTH_USER_MODEL` for user relations and `get_user_model()` at runtime.
+Use Wagtail's `get_image_model_string()` for image relations and `get_image_model()`
+at runtime. Check the README for the selected models; never assume Django/Wagtail
+defaults. Preserve existing model settings after the first migration. Contextual
+alt text belongs to image usage (for example `ImageBlock`), not a global image field.
