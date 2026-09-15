@@ -16,7 +16,7 @@ from wagtail_generate.cli import (
     validate_site_name,
 )
 from wagtail_generate.generation import UV_COMMAND, Database, run_wagtail_start
-from wagtail_generate.safety import source_checkout_root
+from wagtail_generate.safety import source_checkout_root, validate_source_package
 
 MARKER = ".wagtail-generate-playground"
 
@@ -87,6 +87,7 @@ def parse_arguments(argv: Sequence[str] | None = None) -> PlaygroundOptions:
     arguments = parser.parse_args(argv)
     try:
         project_name = normalize_package_name(arguments.project_name)
+        validate_source_package(project_name)
         site_name = validate_site_name(arguments.site_name)
         site_subfolder = (
             None
