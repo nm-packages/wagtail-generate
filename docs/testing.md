@@ -3,13 +3,13 @@
 The ordinary test suite runs with:
 
 ```shell
-uv run pytest
+make test
 ```
 
 It records application coverage using `pytest-cov`. To inspect a local report:
 
 ```shell
-uv run pytest --cov=wagtail_generate --cov-report=term-missing
+make coverage
 uv run pytest --cov=wagtail_generate --cov-report=html:htmlcov
 open htmlcov/index.html
 ```
@@ -23,8 +23,8 @@ The following checks are opt-in locally because they build distributions or
 resolve and install Wagtail and its development dependencies:
 
 ```shell
-WAGTAIL_GENERATE_TEST_DISTRIBUTION=1 uv run pytest tests/test_distribution.py
-WAGTAIL_GENERATE_TEST_COMPATIBILITY=1 uv run pytest tests/test_wagtail_compatibility.py
+make test-distribution
+make test-compatibility
 ```
 
 The distribution test checks the source distribution, wheel, license files, and
