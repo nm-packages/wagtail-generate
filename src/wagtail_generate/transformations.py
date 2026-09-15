@@ -1,5 +1,6 @@
 """Transform Wagtail's generated source package for a selected layout."""
 
+import ast
 import re
 from pathlib import Path
 
@@ -62,24 +63,106 @@ def ensure_package_markers(generated_directory: Path, destination_module: str) -
 
 def rewrite_imports(content: str, project_name: str, destination_module: str) -> str:
     """Rewrite generated project and app imports to the selected module path."""
-    new_prefix = f"{destination_module}."
-    updated = re.sub(
-        rf"(?P<prefix>\b(?:from|import)\s+){re.escape(project_name)}\.",
-        rf"\g<prefix>{new_prefix}",
-        content,
-    )
     updated = re.sub(
         rf"(?P<quote>['\"]){re.escape(project_name)}\.(?=(?:settings|urls|wsgi|asgi)(?:\.|['\"]))",
-        rf"\g<quote>{new_prefix}",
-        updated,
+        rf"\g<quote>{destination_module}.",
+        content,
     )
-    for app_name in ("home", "search"):
-        updated = re.sub(
-            rf"(?P<prefix>\b(?:from|import)\s+){app_name}(?=\s|\.)",
-            rf"\g<prefix>{destination_module}.{app_name}",
-            updated,
-        )
-    return updated
+    # AST positions use UTF-8 byte offsets. Apply edits backwards to retain all
+    # source outside the changed import statements, including settings layout.
+    source = updated.encode()
+    lines = source.splitlines(keepends=True)
+    offsets = [0]
+    for line in lines:
+        offsets.append(offsets[-1] + len(line))
+    edits = []
+    reserved_names = set(re.findall(r"\b\w+\b", updated))
+    inline_loader_lines: set[int] = set()
+    for node in ast.walk(ast.parse(updated)):
+        if isinstance(node, ast.Import):
+            if not any(
+                _relocated_module(alias.name, project_name, destination_module)
+                != alias.name
+                for alias in node.names
+            ):
+                continue
+            indentation = lines[node.lineno - 1][: node.col_offset].decode()
+            inline = bool(indentation.strip())
+            statements = []
+            for alias in node.names:
+                imports = _rewrite_plain_import(
+                    alias, project_name, destination_module, reserved_names
+                )
+                if len(imports) == 2:
+                    if inline:
+                        assert node.end_lineno is not None
+                        inline_loader_lines.add(node.end_lineno)
+                    else:
+                        imports[0] += "  # noqa: F401"
+                statements.extend(imports)
+            separator = "; " if inline else "\n" + indentation
+            replacement = separator.join(statements)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            module = _relocated_module(node.module, project_name, destination_module)
+            if module == node.module:
+                continue
+            statement = ast.get_source_segment(updated, node)
+            assert statement is not None
+            replacement = re.sub(
+                r"\Afrom\b.*?\bimport\b",
+                f"from {module} import",
+                statement,
+                count=1,
+                flags=re.DOTALL,
+            )
+        else:
+            continue
+        assert node.end_lineno is not None and node.end_col_offset is not None
+        start = offsets[node.lineno - 1] + node.col_offset
+        end = offsets[node.end_lineno - 1] + node.end_col_offset
+        edits.append((start, end, replacement.encode()))
+    for line_number in inline_loader_lines:
+        end = offsets[line_number - 1] + len(lines[line_number - 1].rstrip(b"\r\n"))
+        edits.append((end, end, b"  # noqa: F401"))
+    for start, end, replacement_bytes in sorted(edits, reverse=True):
+        source = source[:start] + replacement_bytes + source[end:]
+    return source.decode()
+
+
+def _relocated_module(name: str, project_name: str, destination_module: str) -> str:
+    root, separator, suffix = name.partition(".")
+    if root == project_name:
+        return destination_module + separator + suffix
+    if root in ("home", "search"):
+        return f"{destination_module}.{name}"
+    return name
+
+
+def _rewrite_plain_import(
+    alias: ast.alias,
+    project_name: str,
+    destination_module: str,
+    reserved_names: set[str],
+) -> list[str]:
+    module = _relocated_module(alias.name, project_name, destination_module)
+    if module == alias.name:
+        return [ast.unparse(ast.Import(names=[alias]))]
+    root, separator, _ = alias.name.partition(".")
+    if alias.asname or not separator:
+        return [f"import {module} as {alias.asname or root}"]
+    # An unaliased dotted import loads the leaf but binds the original root.
+    # Keep the loader under a private, unused name and import the relocated root
+    # under the original binding. The loader needs F401 suppression so Ruff does
+    # not remove its side effect; either import order leaves the binding intact.
+    relocated_root = _relocated_module(root, project_name, destination_module)
+    loader_name = "_wagtail_import_" + alias.name.replace(".", "_")
+    while loader_name in reserved_names:
+        loader_name += "_"
+    reserved_names.add(loader_name)
+    return [
+        f"import {module} as {loader_name}",
+        f"import {relocated_root} as {root}",
+    ]
 
 
 def adjust_settings(content: str, destination_module: str) -> str:
@@ -122,7 +205,12 @@ def rewrite_python_files(
     """Apply import rewriting to every generated Python source file."""
     for python_file in generated_directory.rglob("*.py"):
         content = python_file.read_text()
-        updated = rewrite_imports(content, project_name, destination_module)
+        try:
+            updated = rewrite_imports(content, project_name, destination_module)
+        except SyntaxError as error:
+            raise ProjectStructureError(
+                f"cannot rewrite imports in {python_file}: {error.msg}"
+            ) from error
         if updated != content:
             python_file.write_text(updated)
 

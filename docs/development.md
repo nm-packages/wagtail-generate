@@ -221,6 +221,14 @@ rewrite imports, and adjust settings and app configuration. `planning.py` also
 keeps runtime and development dependencies as separate typed groups, so command
 construction and UV resolution do not depend on tuple positions.
 
+Import rewriting uses Python syntax nodes to preserve relative imports and avoid
+rewriting import-like text in comments or strings. Ordinary dotted imports must
+load the relocated submodule while binding the original package name; these use
+separate imports for loading the submodule and binding the package. Loader imports
+use collision-free private aliases and `noqa: F401` so Ruff retains their side
+effects when fixing imports. Runtime regression tests cover aliases, multiple
+imports, function scope, and nested source layouts.
+
 Only a fully successful sequence is published; the destination is checked again
 before publication. Temporary staging is cleaned up on failure.
 

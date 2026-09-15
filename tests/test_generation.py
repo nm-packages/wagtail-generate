@@ -385,7 +385,7 @@ def test_nested_subfolder_keeps_base_directory_at_project_root(
 
     home_directory = generated_directory / "home"
     home_directory.mkdir()
-    (home_directory / "apps.py").write_text('    name = "home"\n')
+    (home_directory / "apps.py").write_text('class HomeConfig:\n    name = "home"\n')
 
     result = _flatten_project_package(
         generated_directory,
@@ -425,7 +425,7 @@ def test_flatten_preserves_unrelated_django_identifiers(
     )
     home_directory = generated_directory / "home"
     home_directory.mkdir()
-    (home_directory / "apps.py").write_text('    name = "home"\n')
+    (home_directory / "apps.py").write_text('class HomeConfig:\n    name = "home"\n')
 
     assert _flatten_project_package(generated_directory, "models", "src")
     content = (generated_directory / "models.py").read_text()
