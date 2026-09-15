@@ -11,15 +11,28 @@ uv run wagtail-generate --help
 Run the routine checks before considering a change complete:
 
 ```shell
-uv run ruff check .
-uv run mypy
-uv run pytest
+make check
+```
+
+The individual checks are also available when iterating on a change:
+
+```shell
+make lint
+make typecheck
+make test
+```
+
+Synchronize the environment and install the Git hooks with:
+
+```shell
+make sync
+uv run pre-commit install
 ```
 
 Run all hooks with:
 
 ```shell
-uv run pre-commit run --all-files
+make pre-commit
 ```
 
 The pytest hook runs the full suite on every commit, including template-only
