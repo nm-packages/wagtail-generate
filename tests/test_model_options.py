@@ -5,12 +5,43 @@ from unittest.mock import patch
 
 import pytest
 
-from wagtail_generate.cli import main
+from wagtail_generate.cli import main, prompt_for_custom_model
 from wagtail_generate.model_options import (
     build_model_files,
     configure_models,
 )
 from wagtail_generate.planning import ProjectOptions, build_generation_plan
+
+
+@pytest.mark.parametrize(
+    "answer,expected",
+    [
+        ("", False),
+        ("n", False),
+        (" NO ", False),
+        ("Y", True),
+        (" yes ", True),
+    ],
+)
+def test_model_prompt(answer, expected, capsys):
+    assert (
+        prompt_for_custom_model("user", "auth.User", "Create?", lambda _: answer)
+        is expected
+    )
+    assert "Current user model: auth.User" in capsys.readouterr().out
+
+
+def test_prompt_retries_and_handles_eof(capsys):
+    answers = iter(["maybe", "yes"])
+    assert prompt_for_custom_model(
+        "image", "wagtailimages.Image", "Create?", lambda _: next(answers)
+    )
+    assert "Please answer yes or no" in capsys.readouterr().out
+
+    def eof(_):
+        raise EOFError
+
+    assert not prompt_for_custom_model("user", "auth.User", "Create?", eof)
 
 
 @pytest.mark.parametrize("interactive", [False, True])
@@ -26,9 +57,7 @@ from wagtail_generate.planning import ProjectOptions, build_generation_plan
 def test_cli_model_choices(tmp_path, interactive, flags, expected):
     with (
         patch("wagtail_generate.cli.sys.stdin.isatty", return_value=interactive),
-        patch(
-            "builtins.input", side_effect=AssertionError("Unexpected prompt")
-        ) as read_input,
+        patch("builtins.input", return_value="") as read_input,
         patch("wagtail_generate.cli.run_wagtail_start", return_value=0) as generate,
     ):
         assert (
@@ -51,7 +80,37 @@ def test_cli_model_choices(tmp_path, interactive, flags, expected):
         generate.call_args.kwargs["custom_user"],
         generate.call_args.kwargs["custom_images"],
     ) == expected
-    read_input.assert_not_called()
+    assert read_input.call_count == (3 - len(flags) if interactive else 0)
+
+
+@pytest.mark.parametrize("user", [False, True])
+@pytest.mark.parametrize("images", [False, True])
+@pytest.mark.parametrize("homepage", [False, True])
+def test_interactive_choices_are_independent(tmp_path, capsys, user, images, homepage):
+    answers = [
+        "",
+        "no",
+        *("yes" if enabled else "no" for enabled in (user, images, homepage)),
+    ]
+    with (
+        patch("wagtail_generate.cli.sys.stdin.isatty", return_value=True),
+        patch("builtins.input", side_effect=answers) as read_input,
+        patch("wagtail_generate.cli.run_wagtail_start", return_value=0) as generate,
+    ):
+        assert main(["start", "example", "--directory", str(tmp_path / "site")]) == 0
+    assert generate.call_args.kwargs["custom_user"] is user
+    assert generate.call_args.kwargs["custom_images"] is images
+    assert generate.call_args.kwargs["starter_homepage"] is homepage
+    assert [call.args[0] for call in read_input.call_args_list] == [
+        "Site name [Example]: ",
+        "Generate the site in a subfolder? [y/N]: ",
+        "Create a custom user model? [y/N]: ",
+        "Create custom image and rendition models? [y/N]: ",
+        "Replace the template homepage with a simple styled starter? [y/N]: ",
+    ]
+    output = capsys.readouterr().out
+    assert "Current user model: auth.User" in output
+    assert "Current image model: wagtailimages.Image" in output
 
 
 @pytest.mark.parametrize("source", [".", "src", "website.source"])

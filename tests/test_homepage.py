@@ -90,14 +90,30 @@ def test_unsupported_homepage_models_fail_without_writes(tmp_path, model):
     assert (tmp_path / HOME_TEMPLATE).read_text() == "Custom homepage"
 
 
-@pytest.mark.parametrize("interactive", [False, True])
-@pytest.mark.parametrize("enabled", [False, True])
-def test_runtime_homepage_choice(tmp_path, interactive, enabled):
+@pytest.mark.parametrize(
+    "interactive,flags,answers,expected,prompt_count",
+    [
+        (True, [], ["yes"], True, 1),
+        (True, [], [""], False, 1),
+        (True, [], ["no"], False, 1),
+        (True, [], ["maybe", "y"], True, 2),
+        (True, [], [EOFError()], False, 1),
+        (True, ["--starter-homepage"], [], True, 0),
+        (False, [], [], False, 0),
+        (False, ["--starter-homepage"], [], True, 0),
+    ],
+)
+def test_runtime_homepage_choice(
+    tmp_path,
+    interactive,
+    flags,
+    answers,
+    expected,
+    prompt_count,
+):
     with (
         patch("wagtail_generate.cli.sys.stdin.isatty", return_value=interactive),
-        patch(
-            "builtins.input", side_effect=AssertionError("Unexpected prompt")
-        ) as read_input,
+        patch("builtins.input", side_effect=answers) as read_input,
         patch("wagtail_generate.cli.run_wagtail_start", return_value=0) as run,
     ):
         assert (
@@ -111,13 +127,19 @@ def test_runtime_homepage_choice(tmp_path, interactive, enabled):
                     ".",
                     "--directory",
                     str(tmp_path / "output"),
-                    *(["--starter-homepage"] if enabled else []),
+                    "--custom-user",
+                    "--custom-images",
+                    *flags,
                 ]
             )
             == 0
         )
-    assert run.call_args.kwargs["starter_homepage"] is enabled
-    read_input.assert_not_called()
+    assert run.call_args.kwargs["starter_homepage"] is expected
+    assert read_input.call_count == prompt_count
+    if prompt_count:
+        assert read_input.call_args.args == (
+            "Replace the template homepage with a simple styled starter? [y/N]: ",
+        )
 
 
 @pytest.mark.parametrize("kind", ["file_symlink", "parent_symlink", "directory"])

@@ -100,6 +100,35 @@ def prompt_for_site_subfolder(
                 print("Please answer yes or no.")
 
 
+def prompt_for_custom_model(
+    label: str,
+    current: str,
+    question: str,
+    input_fn: Callable[[str], str] | None = None,
+) -> bool:
+    """Display the current model and ask an independent, default-no question."""
+    print(f"Current {label} model: {current}")
+    return prompt_yes_no(question, input_fn)
+
+
+def prompt_yes_no(
+    question: str,
+    input_fn: Callable[[str], str] | None = None,
+) -> bool:
+    """Ask a default-no question, preserving the default when input ends."""
+    read_input = input_fn or input
+    while True:
+        try:
+            answer = read_input(f"{question} [y/N]: ").strip().lower()
+        except EOFError:
+            return False
+        if answer in ("", "n", "no"):
+            return False
+        if answer in ("y", "yes"):
+            return True
+        print("Please answer yes or no.")
+
+
 def add_generation_arguments(
     parser: argparse.ArgumentParser, *, interactive: bool = True
 ) -> None:
@@ -135,7 +164,11 @@ def add_generation_arguments(
         parser.add_argument(
             f"--{name}",
             action="store_true",
-            help=f"{description}; disabled by default.",
+            help=(
+                f"{description}; prompts in a terminal, otherwise disabled."
+                if interactive
+                else f"{description}; disabled by default."
+            ),
         )
 
 
@@ -267,15 +300,44 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
                 return 2
 
+        model_options: dict[str, bool] = {}
+        for name, label, current, question in (
+            ("custom_user", "user", "auth.User", "Create a custom user model?"),
+            (
+                "custom_images",
+                "image",
+                "wagtailimages.Image",
+                "Create custom image and rendition models?",
+            ),
+        ):
+            choice = getattr(arguments, name)
+            if not choice:
+                choice = (
+                    prompt_for_custom_model(label, current, question)
+                    if sys.stdin.isatty()
+                    else False
+                )
+            model_options[name] = choice
+
+        starter_homepage = arguments.starter_homepage
+        if not starter_homepage:
+            starter_homepage = (
+                prompt_yes_no(
+                    "Replace the template homepage with a simple styled starter?"
+                )
+                if sys.stdin.isatty()
+                else False
+            )
+
         result = run_wagtail_start(
             project_name=project_name,
             site_name=site_name,
             database=database,
             project_root=project_root,
             site_subfolder=site_subfolder,
-            starter_homepage=arguments.starter_homepage,
-            custom_user=arguments.custom_user,
-            custom_images=arguments.custom_images,
+            starter_homepage=starter_homepage,
+            custom_user=model_options["custom_user"],
+            custom_images=model_options["custom_images"],
         )
         if result == 0 and arguments.directory is None:
             action = "Using" if project_root_exists else "Created"
