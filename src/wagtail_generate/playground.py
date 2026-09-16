@@ -79,9 +79,6 @@ def parse_arguments(argv: Sequence[str] | None = None) -> PlaygroundOptions:
     parser.set_defaults(
         site_directory=Path("."),
         site_name="Developer Playground",
-        starter_homepage=False,
-        custom_user=False,
-        custom_images=False,
     )
     arguments = parser.parse_args(argv)
     try:

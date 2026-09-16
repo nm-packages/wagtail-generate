@@ -299,20 +299,20 @@ def test_generation_options_reach_generator(
     assert (destination / playground.MARKER).is_file()
 
 
-def test_boolean_options_can_be_explicitly_disabled() -> None:
-    options = playground.parse_arguments(
-        [
-            "--custom-user",
-            "--no-custom-user",
-            "--custom-images",
-            "--no-custom-images",
-            "--starter-homepage",
-            "--no-starter-homepage",
-        ]
-    )
+def test_optional_features_are_disabled_by_default() -> None:
+    options = playground.parse_arguments([])
     assert not options.custom_user
     assert not options.custom_images
     assert not options.starter_homepage
+
+
+@pytest.mark.parametrize(
+    "flag", ["--no-custom-user", "--no-custom-images", "--no-starter-homepage"]
+)
+def test_negative_feature_flags_are_rejected(flag: str) -> None:
+    with pytest.raises(SystemExit) as error:
+        playground.parse_arguments([flag])
+    assert error.value.code == 2
 
 
 @pytest.mark.parametrize(
