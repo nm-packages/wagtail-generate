@@ -37,10 +37,11 @@ location.
 - `--database postgresql` or `--database mysql` selects a server database.
   SQLite is the default.
 - `--custom-user` and `--custom-images` enable the optional user and image
-  model apps. Their `--no-...` forms disable the corresponding interactive
-  prompts.
+  model apps.
 - `--starter-homepage` replaces the template homepage with a simple styled
-  homepage. `--no-starter-homepage` preserves the template homepage.
+  homepage. Omitting this flag preserves the template homepage.
+
+These three features are opt-in: they are disabled unless their flag is passed, and never prompt.
 
 Custom model choices should be made before adding data. Changing them later
 requires migration planning. Custom model and homepage options are independent.
@@ -49,7 +50,7 @@ requires migration planning. Custom model and homepage options are independent.
 
 This repository's developer documentation is split by topic:
 
-- [Development index](docs/development.md) — where to find each guide.
+- [Contributing](docs/contributing.md) — contributor guidance and links to each guide.
 - [Setup](docs/setup.md) — environment setup and routine checks.
 - [Testing](docs/testing.md) — test suites, coverage, and opt-in checks.
 - [Playground](docs/playground.md) — the disposable generated site.

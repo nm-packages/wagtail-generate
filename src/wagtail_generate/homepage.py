@@ -17,7 +17,7 @@ def validate_homepage(source: Path) -> None:
     message = (
         "--starter-homepage requires home/models.py with a conventional HomePage "
         "and home/templates/home/home_page.html; preserve this template by "
-        "answering no or passing --no-starter-homepage"
+        "omitting --starter-homepage"
     )
     model = source / "home/models.py"
     if not model.is_file() or not (source / HOME_TEMPLATE).is_file():

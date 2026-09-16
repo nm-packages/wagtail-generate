@@ -1,8 +1,6 @@
-# Development guide
+# Contributing to wagtail-generate
 
-This repository contains `wagtail-generate`, a CLI for creating Wagtail CMS
-projects. The README covers running the generator. These guides cover working
-on the generator itself.
+This guide is for developers contributing to `wagtail-generate`, a CLI for creating Wagtail CMS projects. The [README](../README.md) covers using the generator. The guides below cover setting up the repository, making changes, and validating contributions.
 
 - [Setup](setup.md) — install dependencies and run the routine checks.
 - [Testing](testing.md) — test suites, coverage, and opt-in integration checks.

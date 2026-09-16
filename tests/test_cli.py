@@ -566,3 +566,15 @@ def test_default_site_name_is_derived_from_package(
     )
     assert prompts == ["Site name [My Example Site]: "]
     assert run_start.call_args.kwargs["site_name"] == "My Example Site"
+
+
+@pytest.mark.parametrize(
+    "flag", ["--no-custom-user", "--no-custom-images", "--no-starter-homepage"]
+)
+def test_negative_feature_flags_are_rejected(
+    flag: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as error:
+        main(["start", "example", flag])
+    assert error.value.code == 2
+    assert f"unrecognized arguments: {flag}" in capsys.readouterr().err

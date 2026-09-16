@@ -1,7 +1,7 @@
 # AI agent instructions
 
 This file provides instructions for AI agents. Developer-facing guidance belongs
-in [docs/development.md](docs/development.md); keep it current when repository
+in [docs/contributing.md](docs/contributing.md); keep it current when repository
 conventions change. Do not direct developers to this file as documentation.
 
 ## Purpose
