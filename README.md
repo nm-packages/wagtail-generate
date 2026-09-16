@@ -26,8 +26,7 @@ administrator setup, Docker, databases, and quality checks.
 ## Options
 
 Run `wagtail-generate start --help` for the complete option list and defaults.
-Running `wagtail-generate start mysite` prompts for a site name and source
-location.
+Running `wagtail-generate start mysite` prompts for a site name and source location. In a terminal, it also asks whether to create custom user and image models and use the starter homepage. Each optional feature defaults to No.
 
 - `--site-name "My Site"` sets the display name and default directory name.
 - `--directory PATH` sets the destination. It must be missing or empty and
@@ -39,9 +38,9 @@ location.
 - `--custom-user` and `--custom-images` enable the optional user and image
   model apps.
 - `--starter-homepage` replaces the template homepage with a simple styled
-  homepage. Omitting this flag preserves the template homepage.
+  homepage.
 
-These three features are opt-in: they are disabled unless their flag is passed, and never prompt.
+These three features are opt-in: answer Yes at the prompt or pass the corresponding flag to enable them. Passing a flag skips its prompt; otherwise, answer No or press Enter to leave the feature disabled. Non-interactive runs disable omitted features without prompting.
 
 Custom model choices should be made before adding data. Changing them later
 requires migration planning. Custom model and homepage options are independent.

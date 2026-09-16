@@ -205,5 +205,5 @@ behaviour. Wagtail supplies the page title and site name. Custom base templates
 must expose these blocks. Future frontend tooling can extend or replace this
 stylesheet, and richer page content can be added to the template.
 {% else -%}
-The homepage supplied by the Wagtail project template is preserved. Pass `--starter-homepage` when generating a project to select a simple homepage with plain CSS and no frontend build step. Omitting the flag preserves the template homepage without prompting.
+The homepage supplied by the Wagtail project template is preserved. Pass `--starter-homepage` when generating a project to select a simple homepage with plain CSS and no frontend build step. Interactive generation also offers this choice with No as the default. Answer No or press Enter to preserve the template homepage; non-interactive generation preserves it when the flag is omitted.
 {% endif -%}
