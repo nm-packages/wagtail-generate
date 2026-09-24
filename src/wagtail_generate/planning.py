@@ -264,6 +264,19 @@ def _plan_documentation_files(
             )
             for name in ("environment", "backend", "checks")
         ),
+        *(
+            plan_template(
+                f".agents/skills/wagtail-frontend-setup/{name}",
+                f"skills/wagtail-frontend-setup/{name}.jinja",
+                documentation_context,
+                overwrite=False,
+            )
+            for name in (
+                "SKILL.md",
+                "references/plain-css.md",
+                "references/sass-esbuild.md",
+            )
+        ),
         plan_template(
             "README.md",
             "README.md.jinja",

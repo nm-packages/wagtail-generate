@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 
 .PHONY: help sync lint typecheck test check pre-commit coverage \
-	test-distribution test-compatibility playground playground-reset
+	test-distribution test-compatibility test-frontend playground playground-reset
 
 help:
 	@echo "make sync              Synchronize the development environment"
@@ -13,6 +13,7 @@ help:
 	@echo "make coverage          Run tests with a coverage summary"
 	@echo "make test-distribution Run the opt-in distribution test"
 	@echo "make test-compatibility Run the opt-in Wagtail compatibility test"
+	@echo "make test-frontend      Exercise the generated frontend recipe (requires Node/npm)"
 	@echo "make playground        Rebuild and serve SQLite with src layout, starter homepage, custom users, and custom images"
 	@echo "make playground-reset  Delete the generated playground"
 
@@ -41,6 +42,9 @@ test-distribution:
 
 test-compatibility:
 	WAGTAIL_GENERATE_TEST_COMPATIBILITY=1 uv run pytest tests/test_wagtail_compatibility.py
+
+test-frontend:
+	WAGTAIL_GENERATE_TEST_FRONTEND=1 uv run pytest tests/test_frontend_workflow.py
 
 playground:
 	uv run python -m wagtail_generate.playground \

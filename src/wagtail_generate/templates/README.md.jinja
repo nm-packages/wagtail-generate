@@ -167,6 +167,16 @@ If a formatter changes files during that first run, inspect the changes and run
 Use `uv add` and `uv remove` for dependencies. `pyproject.toml` and `uv.lock` are
 authoritative; this project intentionally does not use `requirements.txt`.
 
+## Frontend setup
+
+Frontend tooling is chosen and maintained by this site's developer. Generation does not install Node or a frontend build stack.
+
+The repository includes a [frontend setup skill](.agents/skills/wagtail-frontend-setup/SKILL.md) for an AI agent to inspect the site, establish your requirements, implement the integration, and verify development and production assets. For example, ask: "Use wagtail-frontend-setup to add Sass and JavaScript bundling with local UV development." Follow your agent's skill selection interface; agents without automatic skill discovery can read the linked file directly.
+
+You can also follow the [plain CSS/JavaScript guide](.agents/skills/wagtail-frontend-setup/references/plain-css.md) or the [Sass/esbuild recipe](.agents/skills/wagtail-frontend-setup/references/sass-esbuild.md) yourself. After setup, document the chosen stack, commands, asset locations, and deployment steps in this README or `docs/frontend.md`.
+
+These files are owned by this project. Upgrading wagtail-generate does not update generated skill copies; review and adapt the guidance as the site and its dependencies evolve.
+
 ## User and image models
 
 - User model: `{{ user_model | default('auth.User') }}`

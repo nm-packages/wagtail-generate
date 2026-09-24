@@ -1,0 +1,15 @@
+# Plain CSS and JavaScript
+
+Use this path when the developer wants browser-native CSS and JavaScript without compilation. Keep existing static files and template conventions where they already work.
+
+For a new entry point, use namespaced app static files such as `{{ source_directory }}/home/static/home/css/site.css` and `{{ source_directory }}/home/static/home/js/site.js`. Inspect the current layout first; the source path may have changed. Never put source files in the root collected `static/` directory.
+
+Load assets with Django's `static` template tag in the existing base template blocks. Use `defer` for a classic script, or `type="module"` only when browser modules are needed. Preserve `block.super` where extending a block that already contains assets, Wagtail's user bar, and the homepage's extra styles. If the starter homepage is enabled, its `home/css/starter-homepage.css` can remain independent or be deliberately incorporated into the new styling.
+
+Keep image/font URLs in CSS relative to the stylesheet's static location, and verify them after collection. Supply asset URLs to JavaScript from rendered template attributes where appropriate. Browser module imports, dynamic imports, and JavaScript-created asset URLs need their own production URL strategy; do not assume Django rewrites arbitrary JavaScript strings.
+
+Use the existing `make dev` or `make docker` command. Save source files and refresh the browser manually. Add no package.json, Node dependency, or build command for this workflow.
+
+Verify asset discovery and a rendered page in development, then run `collectstatic` and verify the page and referenced assets with the deployed storage configuration and `DEBUG=False`. Document file locations, template blocks, manual refresh, and the deployment's static serving method in the site's developer docs.
+
+Consult the documentation matching the installed Django version: [static files](https://docs.djangoproject.com/en/stable/howto/static-files/) and [staticfiles storage](https://docs.djangoproject.com/en/stable/ref/contrib/staticfiles/).

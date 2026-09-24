@@ -1,0 +1,40 @@
+---
+name: wagtail-frontend-setup
+description: Set up or deliberately change CSS/Sass and JavaScript tooling in this Wagtail site, including template integration, development commands, and production static assets. Use for frontend build setup requests; ordinary styling or component edits should use the existing stack.
+---
+
+# Wagtail frontend setup
+
+Implement the developer's requested frontend workflow in this site. The developer chooses and owns the stack; loading this skill does not itself authorize installing a new stack or replacing an existing one.
+
+## Inspect and choose
+
+Read the root `AGENTS.md`, README, and relevant guides in `docs/agent-instructions/`. Run commands from the project root. Follow the selected local UV or Compose environment for Python commands; keep Node tooling in that workflow too.
+
+At generation, the site source directory was `{{ source_directory }}`, settings package `{{ settings_module }}`, and database `{{ database }}`. Inspect current files before using those paths. Locate `base.html`, its CSS and JavaScript blocks, static source directories, `STATIC_ROOT`, static storage, Make targets, Docker/Compose files, and any CI or deployment configuration. Check installed Django and Wagtail versions and existing frontend packages and lockfiles.
+
+Honour the requested stack and existing conventions. If no stack was specified and none exists, establish whether the developer needs plain CSS, Sass, or another framework, JavaScript bundling, and automatic browser reload. Ask only for unresolved choices that change the implementation. Do not replace an existing pipeline to match a recipe.
+
+- For plain CSS and JavaScript, read [plain-css.md](references/plain-css.md). No Node is needed.
+- For a new Sass and JavaScript build, read [sass-esbuild.md](references/sass-esbuild.md). It provides the initial maintained recipe with manual browser refresh.
+- If the developer requests Tailwind or another stack, keep that choice. Explain that it is outside the supplied recipe, consult its current official integration guidance, and apply the verification requirements below. Do not silently substitute Sass.
+
+## Integrate
+
+Keep editable sources separate from generated output. Preserve existing template blocks, Wagtail user bar, metadata, and starter homepage styling unless the request changes them. Adapt existing assets deliberately; avoid loading the same stylesheet twice.
+
+For builds, record a compatible Node version and commit the chosen package manager's lockfile. Use locked installs in CI and Docker. Consult version-matched official documentation for uncertain APIs. Provide development and production commands, with asset compilation before `collectstatic`. Keep the site's selected environment, database preparation, and `.env` behaviour working. A combined development command must stop its children on interruption or child exit and propagate failures.
+
+Inspect the deployed static serving path as well as the compiler. Choose one coherent strategy for manifests, filenames, and URL rewriting. Do not write editable source into `STATIC_ROOT`. A successful development build alone does not prove production assets load.
+
+## Verify and hand over
+
+Run the project's completion checks and verify the requested workflow:
+
+- Plain mode works without installing Node. For a build, a clean locked install and production build succeed.
+- Editing a stylesheet (including an imported Sass partial) and JavaScript updates development output. State whether browser refresh is manual.
+- Stop the combined command with Ctrl-C and simulate a child-process failure; check the server and watchers are gone and failure returns nonzero. Distinguish compiler diagnostics that leave a watcher running from an exited process.
+- Run `collectstatic` with the site's production static storage and `DEBUG=False`. Render a page and check its CSS/JavaScript URLs and referenced images/fonts through the intended static serving path. Check CSS rewriting and any manifest lookups; do not rely on development static serving as production evidence.
+- Verify relevant local/Compose commands and CI/Docker build steps. Inspect the page at narrow and wide widths and check keyboard use for any interaction changed by the task.
+
+Write human-facing instructions in the README or `docs/frontend.md`: chosen versions and tools, sources and outputs, commands, adding entry points, refresh behaviour, deployment order, and limitations. Update standing agent guidance only for conventions actually adopted. Report completed changes, checks actually run, and unresolved deployment requirements. Generated skill copies belong to the site and receive no automatic updates from wagtail-generate.

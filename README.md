@@ -23,6 +23,8 @@ make dev
 Open <http://localhost:8000>. The generated project's `README.md` explains
 administrator setup, Docker, databases, and quality checks.
 
+Generated projects also include a `wagtail-frontend-setup` agent skill with guides for plain CSS/JavaScript and Sass with esbuild. Use it when you are ready to choose and implement the site's frontend tooling. Generation adds no Node requirement or frontend dependencies; the site developer owns the chosen stack and the generated guidance.
+
 ## Options
 
 Run `wagtail-generate start --help` for the complete option list and defaults.

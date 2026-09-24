@@ -44,6 +44,12 @@ Wagtail is installed into each generated project's environment rather than into
 the generator's runtime environment. Prefer the standard library over adding a
 runtime dependency.
 
+## Generated skills
+
+The documentation plan includes the repository skill at `.agents/skills/wagtail-frontend-setup/`. Its entry point and recipe references are packaged templates, rendered with project context and preserved on write like other custom agent guidance. Including the skill never adds frontend dependencies or commands to generation.
+
+Keep the entry point focused on selecting and integrating a frontend workflow. Put tool-specific recipes in its references and ordinary site instructions in the generated README or developer docs. Site developers own generated skill copies; the generator does not update them in place. Validate changes to recipes with the opt-in frontend workflow checks described in [Testing](testing.md), as well as rendering and distribution tests.
+
 Implementation-level details belong in module docstrings, focused comments, and
 regression tests. In particular, keep import-rewriting rules, cleanup safety,
 staging order, and model/template compatibility constraints close to the code
