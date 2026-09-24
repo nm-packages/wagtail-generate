@@ -262,7 +262,7 @@ def _plan_documentation_files(
                 documentation_context,
                 overwrite=False,
             )
-            for name in ("environment", "backend", "checks")
+            for name in ("environment", "backend", "templates", "checks")
         ),
         *(
             plan_template(
