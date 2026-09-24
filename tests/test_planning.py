@@ -78,6 +78,9 @@ def test_complete_plan_is_rendered_without_writing_destination(
         Path("docs/agent-instructions/environment.md"),
         Path("docs/agent-instructions/backend.md"),
         Path("docs/agent-instructions/checks.md"),
+        Path(".agents/skills/wagtail-frontend-setup/SKILL.md"),
+        Path(".agents/skills/wagtail-frontend-setup/references/plain-css.md"),
+        Path(".agents/skills/wagtail-frontend-setup/references/sass-esbuild.md"),
     }
 
 
@@ -106,6 +109,8 @@ def test_documentation_preserves_custom_agent_guidance(tmp_path: Path) -> None:
     custom_paths = (
         Path("AGENTS.md"),
         Path("docs/agent-instructions/backend.md"),
+        Path(".agents/skills/wagtail-frontend-setup/SKILL.md"),
+        Path(".agents/skills/wagtail-frontend-setup/references/sass-esbuild.md"),
     )
     for path in custom_paths:
         destination = tmp_path / path

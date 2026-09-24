@@ -14,3 +14,5 @@ Support the Python version declared in `.python-version` and `pyproject.toml`.
 
 Create a branch before making changes, using `<work-type>/<short-description>`.
 Do not work directly on `main`.
+
+When changing a generated agent skill, keep its packaged instructions and linked references consistent with the generated project's commands and layouts. Test executable recipes in disposable generated projects using the [frontend workflow checks](testing.md#frontend-workflow). Keep developer-facing setup instructions available without requiring an AI agent.

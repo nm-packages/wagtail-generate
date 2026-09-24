@@ -121,7 +121,12 @@ def test_release_artifacts_include_license(tmp_path: Path) -> None:
                     "plan = build_generation_plan(options, '3.14'); "
                     "assert plan.options.database == sys.argv[1]; "
                     "assert len(plan.model_files) == 11; "
-                    "assert len(plan.homepage_files) == 2; print('ok')",
+                    "assert len(plan.homepage_files) == 2; "
+                    "skills = [f for f in plan.documentation_files "
+                    "if f.relative_path.parts[0] == '.agents']; "
+                    "assert len(skills) == 3; "
+                    "assert all(f.content and not f.overwrite for f in skills); "
+                    "print('ok')",
                     database,
                     "root" if source_layout is None else "src",
                 ],

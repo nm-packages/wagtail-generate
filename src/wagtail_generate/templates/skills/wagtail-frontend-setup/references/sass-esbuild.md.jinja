@@ -1,0 +1,90 @@
+{% set source_prefix = '' if source_directory == '.' else source_directory ~ '/' -%}
+# Sass and JavaScript with esbuild
+
+Use this recipe for a new Sass/JavaScript workflow when it fits the developer's requirements. Adapt existing pipelines instead of replacing them. Sass compiles styles, esbuild bundles JavaScript, and concurrently supervises development processes. This recipe provides file watching with manual browser refresh; it does not provide HMR.
+
+## Sources and asset URLs
+
+Use `frontend/scss/site.scss` (and partials beneath `frontend/scss/`) and `frontend/js/site.js` as editable entries at the repository root. Create them before the first build, preserving any existing site styles. Write outputs into the installed home app at `{{ source_prefix }}home/static/home/build/css/site.css` and `{{ source_prefix }}home/static/home/build/js/site.js`. Do not add this directory to `STATICFILES_DIRS`: app static discovery already finds it.
+
+Use stable build filenames and let Django's configured static storage own production hashing. The JavaScript bundle is a classic IIFE without code splitting. For images/fonts, keep source assets in namespaced app static directories such as `{{ source_prefix }}home/static/home/images/`. Sass preserves `url()` values, so resolve them relative to the **output** CSS location: `../../images/logo.svg` points from `home/build/css/site.css` to `home/images/logo.svg`. Django manifest storage can rewrite that reference during collection. Test every asset type you use.
+
+Do not use JavaScript file-loader imports, chunk splitting, or hard-coded hashed URLs with this recipe. Supply static URLs through Django-rendered HTML attributes for JavaScript to read. If the site needs module chunks or a bundler manifest, design and verify that integration explicitly rather than adding another hashing layer to this recipe.
+
+## Install and commands
+
+Use a supported Node release compatible with the packages; record the chosen version in `.node-version` and `package.json` engines, and use the same release in CI/Docker. This recipe is exercised with Node 22.22.2. Resolve compatible package versions at setup time and commit the resulting exact direct versions and `package-lock.json`. For a new npm project, merge the fragment below into a private package.json, then run `npm install --save-dev --save-exact sass esbuild concurrently`. Use `npm ci --include=dev` for subsequent locked build installs, including production build stages; the compilers are development dependencies.
+
+The following is a package.json **fragment**, not a replacement for an existing package. The `dev:django` command illustrates local UV development after the usual environment/database setup and migrations. Preserve existing `.env` loading: add `--env-file .env` after `uv run` if the file exists and is used by the site. Never pass it for a missing file. Retain the existing Make targets' database preparation; run the combined command in place of their final `runserver` step.
+
+```json
+{
+  "private": true,
+  "scripts": {
+    "build:css": "sass --no-source-map --no-error-css --style=compressed frontend/scss/site.scss {{ source_prefix }}home/static/home/build/css/site.css",
+    "build:js": "esbuild frontend/js/site.js --bundle --format=iife --minify --outfile={{ source_prefix }}home/static/home/build/js/site.js",
+    "build": "npm run build:css && npm run build:js",
+    "watch:css": "sass --watch --poll --no-source-map --no-error-css frontend/scss:{{ source_prefix }}home/static/home/build/css",
+    "watch:js": "esbuild frontend/js/site.js --bundle --format=iife --watch=forever --outfile={{ source_prefix }}home/static/home/build/js/site.js",
+    "watch": "npm run build && concurrently --kill-others --success all \"npm:watch:css\" \"npm:watch:js\"",
+    "dev:django": "uv run python manage.py runserver",
+    "dev": "npm run build && concurrently --kill-others --success all \"npm:watch:css\" \"npm:watch:js\" \"npm:dev:django\""
+  }
+}
+```
+
+Keep additional Sass files as underscore-prefixed partials unless they are deliberate entries. Directory watching covers nested partials; add any external Sass load paths explicitly to the watch command. Initial compilation fails the command on invalid source. During watching, compiler errors are reported and watchers may stay alive to accept a fix; process exit stops peer processes. Do not describe a watcher diagnostic as a successful build. Verify Ctrl-C and child-failure cleanup on the developer's platform, including Django's autoreloader.
+
+Ignore `/node_modules/` and `/{{ source_prefix }}home/static/home/build/` in Git; commit source assets and the package lockfile. Exclude host node_modules from Docker's build context. Add the two output files via Django's `static` tag to the existing base template CSS/JS blocks; use `defer` for the IIFE. Preserve existing styles, extra blocks, metadata, and Wagtail user bar. For another entry point, update both build and watch scripts and wire its outputs into the appropriate template.
+
+## Compose development
+
+Keep Python in the generated `web` service and add a Node `frontend` service using the selected Node image. Set its working directory to `/app`, bind-mount the project there, and mount a dedicated named volume at `/app/node_modules` so host dependencies are not mixed with Linux dependencies. Run locked installation inside that service. The web service must see compiled app static files through the shared project mount.
+
+Merge this fragment into compose.yaml, retaining existing services, volumes, dependencies, and database health checks. JSON is also valid Compose YAML. Match the Node image to the version chosen above; `init: true` helps reap child processes.
+
+```json
+{
+  "services": {
+    "frontend": {
+      "image": "node:22.22.2-bookworm-slim",
+      "init": true,
+      "working_dir": "/app",
+      "command": ["npm", "run", "watch"],
+      "volumes": [".:/app", "frontend-node-modules:/app/node_modules"]
+    }
+  },
+  "volumes": {"frontend-node-modules": {}}
+}
+```
+
+After the usual environment preparation, expose a script like this through the Docker Make target. Build assets before web starts. After shutdown, inspect both services so a frontend failure cannot be hidden by a successful web exit. Keep the services single-instance for this launcher; adapt it explicitly if the deployment uses replicas. Ctrl-C stops the attached services; signal exit codes may produce a nonzero launcher status. Test both failure directions, and avoid removing database volumes during cleanup.
+
+```sh
+#!/bin/sh
+set -eu
+docker compose run --rm frontend sh -c 'npm ci --include=dev && npm run build'
+status=0
+docker compose up --build --abort-on-container-exit web frontend || status=$?
+for service in web frontend; do
+    container=$(docker compose ps --all --quiet "$service")
+    [ -n "$container" ] || exit 1
+    code=$(docker inspect --format '{{ '{{.State.ExitCode}}' }}' "$container")
+    if [ "$code" -ne 0 ]; then
+        status=1
+    fi
+done
+exit "$status"
+```
+
+## Production and CI
+
+Run `npm ci --include=dev`, `npm run build`, and only then Django's `collectstatic` with the deployment's settings. In a multi-stage image, use a Node build stage and copy `{{ source_prefix }}home/static/home/build/` from it into the same path in the Python image before collection. Ensure the build stage receives package.json, package-lock.json, and `frontend/`; include any other referenced source inputs. Keep Node and node_modules out of the runtime image when they are not needed there. The generated Dockerfile is a development image: inspect the site's actual deployment before adding a production stage or changing settings.
+
+CI should use the same Node version and locked install, check build failure exits nonzero, and verify collected assets. Use the site's configured production storage; with manifest storage, inspect the hashed CSS and its rewritten image/font URLs as well as the template's CSS/JS URLs. Django's development server is not the production asset server. Test through the intended static serving path with `DEBUG=False`; record any deployment checks that cannot be run locally.
+
+Document commands, output paths, the manual refresh behaviour, adding entry points, and these URL constraints in the site's README or `docs/frontend.md`. Update the local and Compose Make targets to expose the selected workflow without silently switching environments.
+
+## Tool references
+
+Check the installed versions against the official [Sass CLI](https://sass-lang.com/documentation/cli/dart-sass/), [esbuild API](https://esbuild.github.io/api/), [concurrently documentation](https://github.com/open-cli-tools/concurrently), and [Django staticfiles documentation](https://docs.djangoproject.com/en/stable/ref/contrib/staticfiles/).
