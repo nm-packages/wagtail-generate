@@ -48,6 +48,8 @@ runtime dependency.
 
 The documentation plan includes the repository skill at `.agents/skills/wagtail-frontend-setup/`. Its entry point and recipe references are packaged templates, rendered with project context and preserved on write like other custom agent guidance. Including the skill never adds frontend dependencies or commands to generation.
 
+The generated `docs/agent-instructions/templates.md` guide covers implementing Wagtail page and block templates from a design or brief. It defines the default template organization and links to the backend and checks guides. The frontend skill remains responsible for adding or changing asset tooling.
+
 Keep the entry point focused on selecting and integrating a frontend workflow. Put tool-specific recipes in its references and ordinary site instructions in the generated README or developer docs. Site developers own generated skill copies; the generator does not update them in place. Validate changes to recipes with the opt-in frontend workflow checks described in [Testing](testing.md), as well as rendering and distribution tests.
 
 Implementation-level details belong in module docstrings, focused comments, and

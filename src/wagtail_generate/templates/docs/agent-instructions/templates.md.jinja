@@ -1,0 +1,41 @@
+# Implementing Wagtail templates
+
+Read this guide when building or changing the generated site's page templates, whether the request starts with a supplied design or a written brief. Also read [Backend and Wagtail](backend.md) when content models, blocks, queries, or migrations change, and [Testing and checks](checks.md) before completion. Use the [frontend setup skill](../../.agents/skills/wagtail-frontend-setup/SKILL.md) only when the task adds or changes asset tooling; use the site's existing stack for ordinary styling and interaction work.
+
+## Plan the page and its content
+
+- Inspect the existing page models, `base.html`, homepage, template blocks, static assets, and any design system. The site source directory at generation was `{{ source_directory }}`; locate the actual files before editing because the site may have evolved.
+- For a supplied design, identify page regions, responsive states, interactions, content variants, and reusable patterns. For a brief, establish the page's purpose, content hierarchy, and expected variants. Ask for missing decisions that would materially change the result; make and state reasonable choices for presentation details.
+- Map each editable region to a Wagtail page field, snippet, or StreamField block. Keep fixed presentation in templates and CSS. Provide useful editor labels, help text, defaults, and validation when adding fields. Do not create a new block type for every visual wrapper or hard-code content that editors need to change.
+- Plan empty, partial, and long content states before markup. Preserve existing content contracts; changing a StreamField block name or shape may require a content migration.
+
+## Default template structure
+
+Use this structure for new work unless the site has an established equivalent:
+
+```text
+<site source>/
+  <project package>/templates/base.html       # existing sitewide document and blocks
+  <app>/templates/<app>/<page_type>.html       # one template per page type
+  <app>/templates/<app>/blocks/<block>.html     # StreamField block markup
+  <app>/templates/<app>/includes/<part>.html   # reusable page components
+```
+
+The exact location of the existing shared `base.html` can differ by source layout; reuse it rather than creating a second document shell. Put sitewide header, navigation, footer, metadata, and asset blocks there or in includes it owns. Extend it from page templates. Keep page-level layout in the page template and a block's own markup in its block template. Extract an include when markup is reused or a page template becomes difficult to read; do not split a small page into needless files. Use namespaced template paths so apps cannot collide. Match the template name used by the Page model, including any explicit `template` or `get_template` override.
+
+Preserve existing `base.html` blocks, `block.super` where needed, Wagtail's user bar, and the generated homepage's styling. Keep Python business rules and database access out of templates; prepare complex context in the page model or a focused helper. Avoid querying related objects repeatedly while rendering lists or blocks.
+
+## Render Wagtail content
+
+- Load the relevant Wagtail template tags. Render a StreamField with `{% raw %}{% include_block page.body %}{% endraw %}`, or iterate over its blocks and call `{% raw %}{% include_block block %}{% endraw %}` when each block needs a wrapper. Give reusable blocks their own templates and use the bound block's `value` there. Do not flatten a block to plain text when it needs its rendering context.
+- Render rich text through Wagtail's rich-text filter or block rendering, according to the field type. Leave Django autoescaping enabled; do not use `safe` on editor input to force markup through.
+- Use Wagtail image tags and appropriate renditions for editor-managed images. Choose dimensions and crops for the design, preserve aspect ratio where appropriate, and provide contextual alternative text for each use. Decorative images may have empty alt text; informative images need meaningful text. Use Django's `static` tag for developer-owned files, not uploaded images.
+- Use Wagtail's page link tools for internal page links so URL routing and site configuration are respected. Give links descriptive text, and check optional or unpublished targets before rendering. Render external links with an appropriate URL and visible label; avoid empty anchors.
+- Keep heading order, landmarks, form labels, focus states, keyboard operation, and contrast appropriate to the page. Make interactive controls real buttons or links rather than clickable containers. Escape attributes and avoid duplicate IDs when a block repeats.
+
+## Verify the result
+
+- Render the page with representative populated, empty, and long content. Check each block type, optional image and link, and missing related content. Test narrow and wide layouts, keyboard use, and the interactions changed by the task.
+- Preview draft changes in Wagtail as well as viewing the published page. Check that unpublished content does not leak into public views and that page and block previews render the intended markup. If a custom block preview needs the site's CSS, configure and verify that preview explicitly.
+- Add focused tests for new rendering behavior or content rules, including regressions for existing content when block definitions change. Run the generated project's completion checks from [Testing and checks](checks.md), including template formatting and Django checks. Report what was verified and any unavailable preview or deployment checks.
+- When template work changes how editors or developers use the site, update the README or a relevant `docs/` page with the content model, template locations, and any build or deployment steps.

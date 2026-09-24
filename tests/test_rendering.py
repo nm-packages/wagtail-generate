@@ -122,10 +122,22 @@ def test_agent_guidance_matches_generated_environment(
     content = render_template("AGENTS.md.jinja", context)
     assert len(content.splitlines()) <= 60
     assert "docker compose run --rm web uv run ruff" not in content
-    for name in ("environment", "backend", "checks"):
+    for name in ("environment", "backend", "templates", "checks"):
         path = f"docs/agent-instructions/{name}.md"
         assert f"]({path})" in content
         content += render_template(f"{path}.jinja", context)
+
+    template_guide = render_template(
+        "docs/agent-instructions/templates.md.jinja", context
+    )
+    assert f"`{source_directory}`" in template_guide
+    assert "<app>/templates/<app>/<page_type>.html" in template_guide
+    assert "{% include_block page.body %}" in template_guide
+    assert "{% include_block block %}" in template_guide
+    assert (
+        "[frontend setup skill](../../.agents/skills/wagtail-frontend-setup/SKILL.md)"
+        in template_guide
+    )
 
     assert f"Site source directory: `{source_directory}`" in content
     assert f"Django settings package: `{settings_module}`" in content
